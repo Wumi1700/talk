@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>帖子 · TALK</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" class="logo">
+        TALK
+        <span class="logo-sub">discover the beauty of life</span>
+      </a>
+      <div class="search-box">
+        <input type="text" placeholder="搜索角色、标签、帖子…">
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="alert('登录功能第二版上线')">登录</button>
+        <button class="btn btn-primary" onclick="alert('注册功能第二版上线')">注册</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar-left">
+      <nav>
+        <a href="index.html"><span class="icon">🏠</span> 首页</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">👥</span> 角色目录</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">#️⃣</span> 标签</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">📍</span> 地点</a>
+      </nav>
+    </aside>
+
+    <main id="post-detail">
+      <div class="empty">加载中…</div>
+    </main>
+
+    <aside class="sidebar-right"></aside>
+  </div>
+
+  <footer class="footer">
+    <div>本站为小说角色扩展创作，所有角色与事件均为虚构，与现实无关。</div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+  <script>initPost();</script>
+</body>
+</html>

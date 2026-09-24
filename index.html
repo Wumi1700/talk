@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TALK · discover the beauty of life</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" class="logo">
+        TALK
+        <span class="logo-sub">discover the beauty of life</span>
+      </a>
+      <div class="search-box">
+        <input type="text" placeholder="搜索角色、标签、帖子…">
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="alert('登录功能第二版上线')">登录</button>
+        <button class="btn btn-primary" onclick="alert('注册功能第二版上线')">注册</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar-left">
+      <nav>
+        <a href="index.html" class="active"><span class="icon">🏠</span> 首页</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">👥</span> 角色目录</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">#️⃣</span> 标签</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">📍</span> 地点</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">🔔</span> 通知</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">✉️</span> 私信</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">👤</span> 我的主页</a>
+        <a href="#" onclick="alert('第二版上线');return false"><span class="icon">⚙️</span> 设置</a>
+      </nav>
+    </aside>
+
+    <main id="feed">
+      <div class="empty">加载中…</div>
+    </main>
+
+    <aside class="sidebar-right">
+      <div class="card">
+        <h3>推荐角色</h3>
+        <div id="recommend"></div>
+      </div>
+      <div class="card">
+        <h3>阵营</h3>
+        <div style="font-size:14px;color:var(--text-muted);line-height:2">
+          🧝 精灵 · 旅人<br>
+          ⚒️ 矮人 · 锻造学徒<br>
+          🧙 人类 · 见习法师
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="footer">
+    <div>本站为小说角色扩展创作，所有角色与事件均为虚构，与现实无关。</div>
+    <div>用户发言不代表本站立场。</div>
+    <div style="margin-top:10px">
+      <a href="#">关于</a>·
+      <a href="#">免责声明</a>·
+      <a href="#">隐私政策</a>·
+      <a href="#">用户协议</a>·
+      <a href="#">规则</a>·
+      <a href="#">赞助</a>
+    </div>
+    <div style="margin-top:10px">© 2026 TALK · World</div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+  <script>initHome();</script>
+</body>
+</html>

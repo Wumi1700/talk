@@ -1,0 +1,20 @@
+{
+  "daniel": {
+    "name": "布兰森·丹尼尔",
+    "nameEn": "Branson Daniel",
+    "handle": "daniel",
+    "avatar": "images/人物头像/布兰森.jpg",
+    "banner": "",
+    "bio": "天天开心",
+    "baseFollowers": 10,
+    "following": 0,
+    "location": "417号航线",
+    "verified": "高级福灵",
+    "faction": "人类",
+    "privacy": {
+      "follows": true,
+      "likes": true,
+      "bookmarks": true
+    }
+  }
+}
