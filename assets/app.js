@@ -16,8 +16,10 @@ function showToast(msg) {
 }
 
 function parseFrontMatter(text) {
-  const m = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
-  if (!m) return { data: {}, content: text };
+  // 自动清理编辑器带来的转义反斜杠（解决 \--- 导致识别失败的问题）
+  const cleanText = text.replace(/\\/g, '');
+  const m = cleanText.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+  if (!m) return { data: {}, content: cleanText };
   const data = {};
   m[1].split('\n').forEach(line => {
     const idx = line.indexOf(':');
