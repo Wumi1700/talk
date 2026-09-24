@@ -71,7 +71,7 @@ async function loadData() {
 
 function avatarHTML(char, size = '') {
   const cls = 'avatar' + (size ? ' ' + size : '');
-  const ch = char ? char.name.slice(0, 1) : '?';
+  const ch = (char && char.name) ? char.name.slice(0, 1) : '?';
   const img = char && char.avatar
     ? `<img src="${char.avatar}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${ch}'">`
     : ch;
@@ -79,7 +79,7 @@ function avatarHTML(char, size = '') {
 }
 
 function renderPostCard(post) {
-  const char = CHARACTERS[post.character] || { name: post.character, handle: post.character };
+  const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
   const tags = (post.tags || []).map(t =>
     `<a class="tag" href="#">#${t}</a>`).join('');
   const verified = char.verified
