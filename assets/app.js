@@ -365,12 +365,12 @@ async function initCharacter() {
         <span><b>${char.following || 0}</b> 关注</span>
       </div>
     </div>
-    <div class="profile-tabs" id="profile-tabs">
-      <button class="active" data-tab="posts">动态</button>
-      ${char.privacy.follows ? '<button data-tab="follows">关注</button>' : ''}
-      ${char.privacy.likes ? '<button data-tab="likes">点赞</button>' : ''}
-      ${char.privacy.bookmarks ? '<button data-tab="bookmarks">收藏</button>' : ''}
-    </div>
+      <div class="profile-tabs" id="profile-tabs">
+        <button class="active" data-tab="posts">动态</button>
+        ${(char.privacy || {}).follows !== false ? '<button data-tab="follows">关注</button>' : ''}
+        ${(char.privacy || {}).likes !== false ? '<button data-tab="likes">点赞</button>' : ''}
+        ${(char.privacy || {}).bookmarks !== false ? '<button data-tab="bookmarks">收藏</button>' : ''}
+      </div>
     <div id="tab-content"></div>
   `;
 
