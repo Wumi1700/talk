@@ -258,7 +258,51 @@ async function toggleFollow(charHandle, btn) {
   }
 }
 
-// ===== 8. 页面入口 =====
+// ===== 8. 角色主页标签页渲染 =====
+async function renderCharacterTab(tab, char, posts) {
+  const tabContent = $('#tab-content');
+  const privacy = char.privacy || { follows: true, likes: true, bookmarks: true };
+
+  if (tab === 'posts') {
+    if (posts.length) {
+      const html = await Promise.all(posts.map(renderPostCard));
+      tabContent.innerHTML = html.join('');
+    } else {
+      tabContent.innerHTML = '<div class="empty">还没有动态</div>';
+    }
+  } else if (tab === 'follows') {
+    if (!privacy.follows) return tabContent.innerHTML = '<div class="empty">该角色未公开关注列表</div>';
+    const list = char.follows || [];
+    if (!list.length) return tabContent.innerHTML = '<div class="empty">还没有关注任何人</div>';
+    tabContent.innerHTML = list.map(h => {
+      const c = CHARACTERS[h];
+      if (!c) return '';
+      return `<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        ${avatarHTML(c)}
+        <div>
+          <div style="font-weight:600;"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
+          <div style="font-size:13px;color:var(--muted);">@${c.handle}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } else if (tab === 'likes') {
+    if (!privacy.likes) return tabContent.innerHTML = '<div class="empty">该角色未公开点赞列表</div>';
+    const likeIds = char.likes || [];
+    const likedPosts = POSTS.filter(p => likeIds.includes(p.id));
+    if (!likedPosts.length) return tabContent.innerHTML = '<div class="empty">还没有点赞过帖子</div>';
+    const html = await Promise.all(likedPosts.map(renderPostCard));
+    tabContent.innerHTML = html.join('');
+  } else if (tab === 'bookmarks') {
+    if (!privacy.bookmarks) return tabContent.innerHTML = '<div class="empty">该角色未公开收藏列表</div>';
+    const bkIds = char.bookmarks || [];
+    const bkPosts = POSTS.filter(p => bkIds.includes(p.id));
+    if (!bkPosts.length) return tabContent.innerHTML = '<div class="empty">还没有收藏过帖子</div>';
+    const html = await Promise.all(bkPosts.map(renderPostCard));
+    tabContent.innerHTML = html.join('');
+  }
+}
+
+// ===== 9. 页面入口 =====
 async function initHome() {
   await checkUser();
   await loadData();
@@ -289,11 +333,9 @@ async function initCharacter() {
   const posts = POSTS.filter(p => p.character === handle);
   const bannerStyle = char.banner ? `style="background-image:url('${char.banner}');background-size:cover;background-position:center"` : '';
 
-  // 查询真实关注数
   const { count: realFollowers } = await db.from('follows').select('*', { count: 'exact', head: true }).eq('character_id', handle);
   const totalFollowers = (char.baseFollowers || 0) + (realFollowers || 0);
 
-  // 查询当前用户是否已关注
   let isFollowing = false;
   if (currentUser) {
     const { data: followDataArr } = await db.from('follows').select('id').eq('character_id', handle).eq('user_id', currentUser.id).limit(1);
@@ -323,18 +365,24 @@ async function initCharacter() {
         <span><b>${char.following || 0}</b> 关注</span>
       </div>
     </div>
-    <div class="profile-tabs">
-      <button class="active">动态</button>
+    <div class="profile-tabs" id="profile-tabs">
+      <button class="active" data-tab="posts">动态</button>
+      ${char.privacy.follows ? '<button data-tab="follows">关注</button>' : ''}
+      ${char.privacy.likes ? '<button data-tab="likes">点赞</button>' : ''}
+      ${char.privacy.bookmarks ? '<button data-tab="bookmarks">收藏</button>' : ''}
     </div>
     <div id="tab-content"></div>
   `;
-  const tabContent = $('#tab-content');
-  if (posts.length) {
-    const html = await Promise.all(posts.map(renderPostCard));
-    tabContent.innerHTML = html.join('');
-  } else {
-    tabContent.innerHTML = '<div class="empty">还没有动态</div>';
-  }
+
+  renderCharacterTab('posts', char, posts);
+
+  $$('#profile-tabs button').forEach(b => {
+    b.addEventListener('click', async () => {
+      $$('#profile-tabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      await renderCharacterTab(b.dataset.tab, char, posts);
+    });
+  });
 }
 
 async function initPost() {
