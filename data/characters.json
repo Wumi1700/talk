@@ -3,7 +3,7 @@
     "name": "布兰森·丹尼尔",
     "nameEn": "Branson Daniel",
     "handle": "daniel",
-    "avatar": "images/人物头像/布兰森.jpg",
+    "avatar": "",
     "banner": "",
     "bio": "天天开心",
     "baseFollowers": 10,
@@ -11,6 +11,9 @@
     "location": "417号航线",
     "verified": "高级福灵",
     "faction": "人类",
+    "follows": ["eileen", "marcus"],
+    "likes": ["2026-09-24-001", "2026-09-24-002"],
+    "bookmarks": ["2026-09-24-003"],
     "privacy": {
       "follows": true,
       "likes": true,
