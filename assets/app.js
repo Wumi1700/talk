@@ -55,84 +55,52 @@ async function checkUser() {
   if (user) {
     const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
     currentProfile = profile;
-    if (!profile) {
-      // 没有profile，说明刚注册，需要选阵营
-      openFactionModal();
-    } else {
-      updateUIForLoggedIn();
-    }
-  } else {
-    updateUIForLoggedOut();
-  }
+    if (!profile) { openFactionModal(); } else { updateUIForLoggedIn(); }
+  } else { updateUIForLoggedOut(); }
 }
 function updateUIForLoggedIn() {
   const actions = $('.topbar-actions');
   if (actions && currentProfile) {
-    actions.innerHTML = `
-      <span style="font-size:14px;font-weight:600;">[${currentProfile.faction}] ${currentProfile.username || '用户'}</span>
-      <button class="btn" onclick="handleLogout()">退出</button>
-    `;
+    actions.innerHTML = `<span style="font-size:14px;font-weight:600;">[${currentProfile.faction}] ${currentProfile.username || '用户'}</span><button class="btn" onclick="handleLogout()">退出</button>`;
   }
 }
 function updateUIForLoggedOut() {
   const actions = $('.topbar-actions');
   if (actions) {
-    actions.innerHTML = `
-      <button class="btn" onclick="openAuthModal()">登录</button>
-      <button class="btn btn-primary" onclick="openAuthModal()">注册</button>
-    `;
+    actions.innerHTML = `<button class="btn" onclick="openAuthModal()">登录</button><button class="btn btn-primary" onclick="openAuthModal()">注册</button>`;
   }
 }
 function openAuthModal() { $('#auth-modal').style.display = 'flex'; }
 function closeAuthModal() { $('#auth-modal').style.display = 'none'; }
 function openFactionModal() { $('#faction-modal').style.display = 'flex'; }
-
 async function handleLogin() {
-  const email = $('#auth-email').value;
-  const password = $('#auth-password').value;
+  const email = $('#auth-email').value, password = $('#auth-password').value;
   if (!email || !password) return showToast('请填写邮箱和密码');
   const { error } = await db.auth.signInWithPassword({ email, password });
   if (error) return showToast('登录失败：' + error.message);
-  showToast('登录成功！');
-  closeAuthModal();
-  checkUser();
+  showToast('登录成功！'); closeAuthModal(); checkUser();
 }
-
 async function handleRegister() {
-  const email = $('#auth-email').value;
-  const password = $('#auth-password').value;
+  const email = $('#auth-email').value, password = $('#auth-password').value;
   if (!email || !password || password.length < 6) return showToast('密码至少6位');
   const { error } = await db.auth.signUp({ email, password });
   if (error) return showToast('注册失败：' + error.message);
-  showToast('注册成功！请选择阵营');
-  closeAuthModal();
-  checkUser();
+  showToast('注册成功！请选择阵营'); closeAuthModal(); checkUser();
 }
-
 async function handleLogout() {
-  await db.auth.signOut();
-  currentUser = null; currentProfile = null;
-  showToast('已退出');
-  updateUIForLoggedOut();
+  await db.auth.signOut(); currentUser = null; currentProfile = null;
+  showToast('已退出'); updateUIForLoggedOut(); location.reload();
 }
-
 async function chooseFaction(faction) {
   if (!currentUser) return;
   const username = prompt('请输入你的昵称：') || '新用户';
-  const { error } = await db.from('profiles').insert({
-    id: currentUser.id,
-    username: username,
-    faction: faction
-  });
+  const { error } = await db.from('profiles').insert({ id: currentUser.id, username: username, faction: faction });
   if (error) return showToast('选阵营失败：' + error.message);
-  showToast('欢迎加入 ' + faction + ' 阵营！');
-  $('#faction-modal').style.display = 'none';
-  checkUser();
+  showToast('欢迎加入 ' + faction + ' 阵营！'); $('#faction-modal').style.display = 'none'; checkUser();
 }
 
 // ===== 5. 数据加载与渲染 =====
-let CHARACTERS = {};
-let POSTS = [];
+let CHARACTERS = {}, POSTS = [];
 async function loadData() {
   const [cRes, pRes] = await Promise.all([fetch('data/characters.json'), fetch('posts/posts.json')]);
   CHARACTERS = await cRes.json();
@@ -150,16 +118,25 @@ async function renderPostCard(post) {
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
   const tags = (post.tags || []).map(t => `<a class="tag" href="#">#${t}</a>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
-  // 获取点赞数
+
+  // 查询点赞
   const { count: likeCount } = await db.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
-  // 获取评论数
-  const { count: commentCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id).eq('status', 'visible');
-  // 是否已点赞
   let isLiked = false;
   if (currentUser) {
     const { data: likeData } = await db.from('likes').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).single();
     isLiked = !!likeData;
   }
+
+  // 查询收藏
+  let isBookmarked = false;
+  if (currentUser) {
+    const { data: bkData } = await db.from('bookmarks').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).single();
+    isBookmarked = !!bkData;
+  }
+
+  // 查询评论数
+  const { count: commentCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id).eq('status', 'visible');
+
   return `
     <article class="post" data-id="${post.id}">
       <div class="post-header">
@@ -173,13 +150,23 @@ async function renderPostCard(post) {
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
         <button class="action ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)">♡ <span>${likeCount || 0}</span></button>
-        <button class="action" onclick="showToast('评论功能在下一版上线')">💬 <span>${commentCount || 0}</span></button>
-        <button class="action" onclick="showToast('请先登录')">🔖 <span>收藏</span></button>
+        <button class="action" onclick="toggleCommentArea('${post.id}')">💬 <span>${commentCount || 0}</span></button>
+        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark('${post.id}', this)">🔖 <span>${isBookmarked ? '已收藏' : '收藏'}</span></button>
+      </div>
+      <!-- 评论区域（默认隐藏） -->
+      <div id="comments-${post.id}" style="display:none; padding-top:12px; border-top:1px solid var(--border); margin-top:12px;">
+        <div id="comments-list-${post.id}" style="margin-bottom:10px;"></div>
+        <div style="display:flex; gap:8px;">
+          <input id="comment-input-${post.id}" type="text" maxlength="500" placeholder="写下你的评论（最多500字）" style="flex:1; padding:8px; border:1px solid var(--border); border-radius:8px;">
+          <button class="btn btn-primary" onclick="submitComment('${post.id}')">发送</button>
+        </div>
+        <div style="font-size:12px; color:var(--muted); margin-top:6px;">每帖最多3条，每天最多10条。先发后审。</div>
       </div>
     </article>
   `;
 }
 
+// ===== 6. 互动功能（点赞、收藏、评论） =====
 async function toggleLike(postId, btn) {
   if (!currentUser) return showToast('请先登录');
   const span = btn.querySelector('span');
@@ -195,7 +182,70 @@ async function toggleLike(postId, btn) {
   }
 }
 
-// ===== 6. 页面入口 =====
+async function toggleBookmark(postId, btn) {
+  if (!currentUser) return showToast('请先登录');
+  const span = btn.querySelector('span');
+  const isBookmarked = span.textContent === '已收藏';
+  if (isBookmarked) {
+    await db.from('bookmarks').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    btn.classList.remove('bookmarked');
+    span.textContent = '收藏';
+  } else {
+    await db.from('bookmarks').insert({ post_id: postId, user_id: currentUser.id });
+    btn.classList.add('bookmarked');
+    span.textContent = '已收藏';
+  }
+}
+
+async function toggleCommentArea(postId) {
+  const area = document.getElementById(`comments-${postId}`);
+  if (area.style.display === 'none') {
+    area.style.display = 'block';
+    await loadComments(postId);
+  } else {
+    area.style.display = 'none';
+  }
+}
+
+async function loadComments(postId) {
+  const list = document.getElementById(`comments-list-${postId}`);
+  list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
+  const { data, error } = await db.from('comments').select('content, created_at, user_id').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
+  if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
+  if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
+  list.innerHTML = data.map(c => {
+    const name = (currentUser && c.user_id === currentUser.id) ? (currentProfile?.username || '我') : '读者';
+    return `<div style="font-size:13px; margin-bottom:6px; padding:6px; background:var(--bg); border-radius:6px;"><b>${name}</b>：${c.content}</div>`;
+  }).join('');
+}
+
+async function submitComment(postId) {
+  if (!currentUser) return showToast('请先登录');
+  const input = document.getElementById(`comment-input-${postId}`);
+  const content = input.value.trim();
+  if (!content) return showToast('请输入评论内容');
+  if (content.length > 500) return showToast('评论最多500字');
+
+  // 检查每帖3条限制
+  const { count: postCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId).eq('user_id', currentUser.id);
+  if (postCount >= 3) return showToast('每帖最多评论3条');
+
+  // 检查每天10条限制
+  const today = new Date().toISOString().split('T')[0];
+  const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
+  if (dayCount >= 10) return showToast('每天最多评论10条');
+
+  const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content });
+  if (error) return showToast('评论失败：' + error.message);
+  showToast('评论成功！');
+  input.value = '';
+  await loadComments(postId);
+  // 刷新评论数
+  const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
+  if (btn) btn.textContent = parseInt(btn.textContent) + 1;
+}
+
+// ===== 7. 页面入口 =====
 async function initHome() {
   await checkUser();
   await loadData();
@@ -269,9 +319,5 @@ async function initPost() {
   root.innerHTML = `
     <a href="index.html" style="font-size:14px">← 返回首页</a>
     <div style="margin-top:16px">${await renderPostCard(post)}</div>
-    <div class="card" style="margin-top:16px">
-      <h3>评论</h3>
-      <div class="empty">评论功能即将上线</div>
-    </div>
   `;
 }
