@@ -580,3 +580,96 @@ async function initPost() {
     <div style="margin-top:16px">${await renderPostCard(post)}</div>
   `;
 }
+
+// ===== 12. 设置页 =====
+async function initSettings() {
+  await checkUser();
+  const root = $('#settings-app');
+  if (!currentUser || !currentProfile) {
+    root.innerHTML = '<div class="empty">请先登录后再查看设置</div>';
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card">
+      <h3>账号信息</h3>
+      <div style="font-size:14px;color:var(--muted);line-height:2;">
+        <div>邮箱：${currentUser.email}</div>
+        <div>阵营：${currentProfile.faction}（选定后 3 个月内不可更改）</div>
+        <div>注册时间：${new Date(currentUser.created_at).toLocaleString('zh-CN')}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>修改昵称</h3>
+      <div style="display:flex;gap:8px;">
+        <input id="new-username" type="text" value="${currentProfile.username || ''}" placeholder="输入新昵称" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <button class="btn btn-primary" onclick="updateUsername()">保存</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>修改密码</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input id="new-password" type="password" placeholder="输入新密码（至少6位）" style="padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <input id="new-password2" type="password" placeholder="再次输入新密码" style="padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <button class="btn btn-primary" onclick="updatePassword()" style="align-self:flex-start;">修改密码</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>退出登录</h3>
+      <button class="btn" onclick="handleLogout()">退出当前账号</button>
+    </div>
+
+    <div class="card" style="border-color:#f5c2c7;">
+      <h3 style="color:#b02a37;">危险操作</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">删除账号会清空你的点赞、收藏、评论、关注、私信记录，操作不可恢复。</p>
+      <button class="btn" onclick="deleteAccount()" style="border-color:#dc3545;color:#dc3545;">删除我的账号</button>
+    </div>
+  `;
+}
+
+async function updateUsername() {
+  const newName = $('#new-username').value.trim();
+  if (!newName) return showToast('昵称不能为空');
+  if (newName.length > 20) return showToast('昵称最多20个字');
+  const { error } = await db.from('profiles').update({ username: newName }).eq('id', currentUser.id);
+  if (error) return showToast('修改失败：' + error.message);
+  currentProfile.username = newName;
+  showToast('昵称已更新');
+  updateUIForLoggedIn();
+}
+
+async function updatePassword() {
+  const p1 = $('#new-password').value;
+  const p2 = $('#new-password2').value;
+  if (!p1 || p1.length < 6) return showToast('密码至少6位');
+  if (p1 !== p2) return showToast('两次输入的密码不一致');
+  const { error } = await db.auth.updateUser({ password: p1 });
+  if (error) return showToast('修改失败：' + error.message);
+  showToast('密码已修改');
+  $('#new-password').value = '';
+  $('#new-password2').value = '';
+}
+
+async function deleteAccount() {
+  const ok = confirm('确定要删除账号吗？所有点赞、收藏、评论、关注、私信都会清空，且不可恢复。');
+  if (!ok) return;
+  const ok2 = confirm('再确认一次：真的要删除吗？');
+  if (!ok2) return;
+
+  try {
+    await db.from('likes').delete().eq('user_id', currentUser.id);
+    await db.from('bookmarks').delete().eq('user_id', currentUser.id);
+    await db.from('comments').delete().eq('user_id', currentUser.id);
+    await db.from('follows').delete().eq('user_id', currentUser.id);
+    await db.from('messages').delete().eq('user_id', currentUser.id);
+    await db.from('profiles').delete().eq('id', currentUser.id);
+    await db.auth.signOut();
+    showToast('账号数据已清除');
+    setTimeout(() => { location.href = 'index.html'; }, 1500);
+  } catch (e) {
+    showToast('删除失败，请联系管理员');
+  }
+}
