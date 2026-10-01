@@ -315,7 +315,7 @@ async function getMonthlyMessageCount() {
 
 async function initMessage() {
   await checkUser();
-  await loadData(); // 关键：先加载角色数据
+  await loadData();
   const root = $('#message-app');
   if (!currentUser) {
     root.innerHTML = '<div class="empty">请先登录后再查看私信</div>';
@@ -325,13 +325,11 @@ async function initMessage() {
   const params = new URLSearchParams(location.search);
   const charHandle = params.get('character');
 
-  // 计算本月额度
   const used = await getMonthlyMessageCount();
   const remaining = Math.max(0, 4 - used);
   const quotaEl = $('#quota-display');
   if (quotaEl) quotaEl.innerHTML = `本月剩余：<b>${remaining}</b> / 4 条`;
 
-  // 如果没指定角色，显示角色列表让用户选
   if (!charHandle) {
     root.innerHTML = `
       <div class="card"><h3>选择一个角色私信</h3></div>
@@ -350,17 +348,14 @@ async function initMessage() {
     return;
   }
 
-  // 指定角色，显示聊天框
   const char = CHARACTERS[charHandle];
   if (!char) { root.innerHTML = '<div class="empty">找不到这个角色</div>'; return; }
 
-  // 检查新用户 24 小时墙
   const { data: { user } } = await db.auth.getUser();
   const createdAt = new Date(user.created_at);
   const hoursSince = (Date.now() - createdAt.getTime()) / 1000 / 3600;
   const isNewUser = hoursSince < 24;
 
-  // 加载历史消息
   const { data: msgs } = await db.from('messages').select('*').eq('user_id', currentUser.id).eq('character_id', charHandle).order('created_at', { ascending: true });
 
   root.innerHTML = `
@@ -401,12 +396,10 @@ async function submitMessage(charHandle) {
   if (!content) return showToast('请输入内容');
   if (content.length > 1000) return showToast('私信最多1000字');
 
-  // 检查新用户 24 小时墙
   const { data: { user } } = await db.auth.getUser();
   const hoursSince = (Date.now() - new Date(user.created_at).getTime()) / 1000 / 3600;
   if (hoursSince < 24) return showToast('注册后 24 小时内不能私信');
 
-  // 检查本月额度
   const used = await getMonthlyMessageCount();
   if (used >= 4) return showToast('本月私信额度已用完（共4条）');
 
@@ -417,7 +410,82 @@ async function submitMessage(charHandle) {
   await initMessage();
 }
 
-// ===== 10. 页面入口 =====
+// ===== 10. 用户个人主页 =====
+async function initProfile() {
+  await checkUser();
+  await loadData();
+  const root = $('#user-profile');
+  if (!currentUser || !currentProfile) {
+    root.innerHTML = '<div class="empty">请先登录后再查看个人主页</div>';
+    return;
+  }
+
+  const username = currentProfile.username || '新用户';
+  const faction = currentProfile.faction || '人类';
+  const createdAt = new Date(currentUser.created_at).toLocaleDateString('zh-CN');
+
+  root.innerHTML = `
+    <div class="card" style="text-align:center;padding:24px;">
+      <div class="avatar large" style="margin:0 auto 12px;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;">${username.slice(0,1)}</div>
+      <div style="font-size:22px;font-weight:800;margin-bottom:6px;">${username}</div>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:8px;">
+        <span class="verified">[${faction}]</span> · 注册于 ${createdAt}
+      </div>
+      <div style="font-size:13px;color:var(--muted);">TALK 旅者编号：${currentUser.id.slice(0,8)}</div>
+    </div>
+    <div class="profile-tabs" id="profile-tabs">
+      <button class="active" data-tab="likes">我的点赞</button>
+      <button data-tab="bookmarks">我的收藏</button>
+      <button data-tab="comments">我的评论</button>
+    </div>
+    <div id="user-tab-content"></div>
+  `;
+
+  const renderUserTab = async (tab) => {
+    const container = $('#user-tab-content');
+    container.innerHTML = '<div class="empty">加载中...</div>';
+
+    if (tab === 'likes') {
+      const { data: likesData } = await db.from('likes').select('post_id').eq('user_id', currentUser.id);
+      const ids = (likesData || []).map(l => l.post_id);
+      const likedPosts = POSTS.filter(p => ids.includes(p.id));
+      if (!likedPosts.length) return container.innerHTML = '<div class="empty">你还没有点赞过帖子</div>';
+      const html = await Promise.all(likedPosts.map(renderPostCard));
+      container.innerHTML = html.join('');
+    } else if (tab === 'bookmarks') {
+      const { data: bkData } = await db.from('bookmarks').select('post_id').eq('user_id', currentUser.id);
+      const ids = (bkData || []).map(b => b.post_id);
+      const bkPosts = POSTS.filter(p => ids.includes(p.id));
+      if (!bkPosts.length) return container.innerHTML = '<div class="empty">你还没有收藏过帖子</div>';
+      const html = await Promise.all(bkPosts.map(renderPostCard));
+      container.innerHTML = html.join('');
+    } else if (tab === 'comments') {
+      const { data: cmData } = await db.from('comments').select('content, post_id, created_at').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+      if (!cmData || !cmData.length) return container.innerHTML = '<div class="empty">你还没有发过评论</div>';
+      container.innerHTML = cmData.map(c => {
+        const post = POSTS.find(p => p.id === c.post_id);
+        const postTitle = post ? post.content.slice(0, 30) + '...' : '（帖子已删除）';
+        return `<div class="card" style="margin-bottom:10px;">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">评论了帖子：${postTitle}</div>
+          <div style="font-size:14px;background:var(--bg);padding:8px;border-radius:8px;">${c.content}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;">${new Date(c.created_at).toLocaleString('zh-CN')}</div>
+        </div>`;
+      }).join('');
+    }
+  };
+
+  renderUserTab('likes');
+
+  $$('#profile-tabs button').forEach(b => {
+    b.addEventListener('click', async () => {
+      $$('#profile-tabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      await renderUserTab(b.dataset.tab);
+    });
+  });
+}
+
+// ===== 11. 页面入口 =====
 async function initHome() {
   await checkUser();
   await loadData();
