@@ -123,15 +123,15 @@ async function renderPostCard(post) {
   const { count: likeCount } = await db.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
   let isLiked = false;
   if (currentUser) {
-    const { data: likeData } = await db.from('likes').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).maybeSingle();
-    isLiked = !!likeData;
+    const { data: likeDataArr } = await db.from('likes').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).limit(1);
+    const isLiked = likeDataArr && likeDataArr.length > 0;
   }
 
   // 查询收藏
   let isBookmarked = false;
   if (currentUser) {
-    const { data: bkData } = await db.from('bookmarks').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).maybeSingle();
-    isBookmarked = !!bkData;
+    const { data: bkDataArr } = await db.from('bookmarks').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).limit(1);
+    const isBookmarked = bkDataArr && bkDataArr.length > 0;
   }
 
   // 查询评论数
