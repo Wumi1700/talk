@@ -406,6 +406,13 @@ async function submitMessage(charHandle) {
 
   const { error } = await db.from('messages').insert({ user_id: currentUser.id, character_id: charHandle, content: content });
   if (error) return showToast('发送失败：' + error.message);
+  await db.from('notifications').insert({
+  user_id: currentUser.id,
+  type: 'message',
+  target_id: '你的私信已送达，等待角色回复',
+  is_read: false
+});
+  
   showToast('私信已发送，等待管理员回复');
   input.value = '';
   await initMessage();
