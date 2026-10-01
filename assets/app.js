@@ -703,8 +703,7 @@ async function renderSidebar() {
   const links = [
     { href: 'index.html', icon: '🏠', text: '首页' },
     { href: '#', icon: '👥', text: '角色目录', alert: '角色目录正在建设中' },
-    { href: '#', icon: '#️⃣', text: '标签', alert: '标签页正在建设中' },
-    { href: '#', icon: '📍', text: '地点', alert: '地点页正在建设中' },
+    { href: '#', icon: '⚔️', text: '阵营论坛', alert: '阵营论坛正在建设中' },
     { href: 'notifications.html', icon: '🔔', text: '通知', badge: unread },
     { href: 'message.html', icon: '✉️', text: '私信' },
     { href: 'profile.html', icon: '👤', text: '我的主页' },
