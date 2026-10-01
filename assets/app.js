@@ -119,12 +119,9 @@ async function renderPostCard(post) {
   const tags = (post.tags || []).map(t => `<a class="tag" href="#">#${t}</a>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
-  // 查询点赞数
   const { count: likeCount } = await db.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
-  // 查询评论数
   const { count: commentCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id).eq('status', 'visible');
 
-  // 查询当前用户是否已点赞/收藏（使用 limit(1) 避免 maybeSingle 报错）
   let isLiked = false;
   let isBookmarked = false;
   if (currentUser) {
@@ -238,7 +235,30 @@ async function submitComment(postId) {
   if (btn) btn.textContent = parseInt(btn.textContent) + 1;
 }
 
-// ===== 7. 页面入口 =====
+// ===== 7. 关注角色 =====
+async function toggleFollow(charHandle, btn) {
+  if (!currentUser) return showToast('请先登录');
+  const isFollowing = btn.classList.contains('following');
+  if (isFollowing) {
+    await db.from('follows').delete().eq('character_id', charHandle).eq('user_id', currentUser.id);
+    btn.classList.remove('following', 'btn-primary');
+    btn.classList.add('btn');
+    btn.textContent = '+ 关注';
+    const countEl = document.getElementById('follower-count');
+    if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
+    showToast('已取消关注');
+  } else {
+    await db.from('follows').insert({ character_id: charHandle, user_id: currentUser.id });
+    btn.classList.add('following', 'btn-primary');
+    btn.classList.remove('btn');
+    btn.textContent = '已关注';
+    const countEl = document.getElementById('follower-count');
+    if (countEl) countEl.textContent = parseInt(countEl.textContent) + 1;
+    showToast('已关注 ' + charHandle);
+  }
+}
+
+// ===== 8. 页面入口 =====
 async function initHome() {
   await checkUser();
   await loadData();
@@ -268,13 +288,28 @@ async function initCharacter() {
   if (!char) { root.innerHTML = '<div class="empty">找不到这个角色</div>'; return; }
   const posts = POSTS.filter(p => p.character === handle);
   const bannerStyle = char.banner ? `style="background-image:url('${char.banner}');background-size:cover;background-position:center"` : '';
+
+  // 查询真实关注数
+  const { count: realFollowers } = await db.from('follows').select('*', { count: 'exact', head: true }).eq('character_id', handle);
+  const totalFollowers = (char.baseFollowers || 0) + (realFollowers || 0);
+
+  // 查询当前用户是否已关注
+  let isFollowing = false;
+  if (currentUser) {
+    const { data: followDataArr } = await db.from('follows').select('id').eq('character_id', handle).eq('user_id', currentUser.id).limit(1);
+    isFollowing = followDataArr && followDataArr.length > 0;
+  }
+
+  const followBtnClass = isFollowing ? 'btn btn-primary following' : 'btn';
+  const followBtnText = isFollowing ? '已关注' : '+ 关注';
+
   root.innerHTML = `
     <div class="profile-banner" ${bannerStyle}></div>
     <div class="profile-header">
       <div class="profile-avatar-row">
         ${avatarHTML(char, 'large')}
         <div class="profile-actions">
-          <button class="btn btn-primary" onclick="showToast('关注功能即将上线')">关注</button>
+          <button class="${followBtnClass}" onclick="toggleFollow('${char.handle}', this)">${followBtnText}</button>
           <button class="btn" onclick="showToast('私信功能即将上线')">私信</button>
         </div>
       </div>
@@ -284,8 +319,8 @@ async function initCharacter() {
       <div class="profile-info">
         <span>📍 ${char.location || ''}</span>
         <span>阵营：${char.faction || '中立'}</span>
-        <span><b>${char.baseFollowers}</b> 粉丝</span>
-        <span><b>${char.following}</b> 关注</span>
+        <span><b id="follower-count">${totalFollowers}</b> 粉丝</span>
+        <span><b>${char.following || 0}</b> 关注</span>
       </div>
     </div>
     <div class="profile-tabs">
