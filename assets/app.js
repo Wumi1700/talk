@@ -57,6 +57,7 @@ async function checkUser() {
     currentProfile = profile;
     if (!profile) { openFactionModal(); } else { updateUIForLoggedIn(); }
   } else { updateUIForLoggedOut(); }
+  if (typeof renderSidebar === 'function') await renderSidebar();
 }
 function updateUIForLoggedIn() {
   const actions = $('.topbar-actions');
@@ -675,19 +676,25 @@ async function deleteAccount() {
 }
 
 // ===== 13. 全站侧边栏自动生成 =====
-function renderSidebar() {
+async function renderSidebar() {
   const sidebar = document.querySelector('.sidebar-left');
   if (!sidebar) return;
   
-  // 获取当前页面文件名，用于高亮
   const path = location.pathname.split('/').pop() || 'index.html';
   
+  // 查询未读数
+  let unread = 0;
+  if (currentUser) {
+    unread = await getUnreadCount();
+  }
+
+  // 还没建的页面，用 onclick 拦截
   const links = [
     { href: 'index.html', icon: '🏠', text: '首页' },
-    { href: 'directory.html', icon: '👥', text: '角色目录' }, // 以后建
-    { href: 'tags.html', icon: '#️⃣', text: '标签' },       // 以后建
-    { href: 'locations.html', icon: '📍', text: '地点' },   // 以后建
-    { href: 'notifications.html', icon: '🔔', text: '通知' }, // 以后建
+    { href: '#', icon: '👥', text: '角色目录', alert: '角色目录正在建设中' },
+    { href: '#', icon: '#️⃣', text: '标签', alert: '标签页正在建设中' },
+    { href: '#', icon: '📍', text: '地点', alert: '地点页正在建设中' },
+    { href: 'notifications.html', icon: '🔔', text: '通知', badge: unread },
     { href: 'message.html', icon: '✉️', text: '私信' },
     { href: 'profile.html', icon: '👤', text: '我的主页' },
     { href: 'settings.html', icon: '⚙️', text: '设置' }
@@ -696,8 +703,11 @@ function renderSidebar() {
   sidebar.innerHTML = `
     <nav>
       ${links.map(l => `
-        <a href="${l.href}" class="${path === l.href ? 'active' : ''}">
+        <a href="${l.href}" 
+           ${l.alert ? `onclick="showToast('${l.alert}');return false;"` : ''} 
+           class="${path === l.href ? 'active' : ''}">
           <span class="icon">${l.icon}</span> ${l.text}
+          ${l.badge ? `<span style="margin-left:auto;background:#E76F51;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;">${l.badge}</span>` : ''}
         </a>
       `).join('')}
     </nav>
@@ -705,4 +715,76 @@ function renderSidebar() {
 }
 
 // 页面加载时自动执行
-document.addEventListener('DOMContentLoaded', renderSidebar);
+document.addEventListener('DOMContentLoaded', async () => {
+  await checkUser();
+  renderSidebar();
+});
+
+// ===== 14. 通知中心 =====
+function notifyText(type) {
+  switch (type) {
+    case 'like': return '有人点赞了你的评论';
+    case 'comment': return '有人回复了你';
+    case 'message': return '角色给你发了一条私信';
+    case 'follow': return '有人关注了你';
+    case 'system': return '系统通知';
+    default: return '新通知';
+  }
+}
+
+async function getUnreadCount() {
+  if (!currentUser) return 0;
+  const { count } = await db.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('is_read', false);
+  return count || 0;
+}
+
+async function initNotifications() {
+  await checkUser();
+  await loadData();
+  const root = $('#notifications-app');
+  if (!currentUser) {
+    root.innerHTML = '<div class="empty">请先登录后再查看通知</div>';
+    return;
+  }
+
+  const { data: list, error } = await db.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(100);
+
+  if (error) { root.innerHTML = '<div class="empty">加载失败：' + error.message + '</div>'; return; }
+
+  if (!list || !list.length) {
+    root.innerHTML = `
+      <div class="card">
+        <h3>通知</h3>
+        <div class="empty">还没有任何通知</div>
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="card"><h3>通知（共 ${list.length} 条）</h3></div>
+    ${list.map(n => {
+      const unread = !n.is_read;
+      const time = new Date(n.created_at).toLocaleString('zh-CN');
+      return `
+        <div class="card" style="background:${unread ? 'var(--primary-light)' : 'var(--card)'};border-color:${unread ? 'var(--primary)' : 'var(--border)'};">
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            ${unread ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--primary);flex-shrink:0;margin-top:8px;"></span>' : ''}
+            <div style="flex:1;">
+              <div style="font-weight:600;font-size:14px;">${notifyText(n.type)}</div>
+              ${n.target_id ? `<div style="font-size:13px;color:var(--muted);margin-top:4px;">${n.target_id}</div>` : ''}
+              <div style="font-size:11px;color:var(--muted);margin-top:6px;">${time}</div>
+            </div>
+            ${unread ? `<button class="btn" onclick="markRead('${n.id}')">标记已读</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+async function markRead(id) {
+  await db.from('notifications').update({ is_read: true }).eq('id', id);
+  await initNotifications();
+  await renderSidebar();
+}
