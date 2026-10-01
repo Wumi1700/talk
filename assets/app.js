@@ -303,9 +303,19 @@ async function renderCharacterTab(tab, char, posts) {
 }
 
 // ===== 9. 私信功能 =====
+async function getMonthlyMessageCount() {
+  if (!currentUser) return 0;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(year, month, 1).toISOString();
+  const { count } = await db.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', firstDay);
+  return count || 0;
+}
+
 async function initMessage() {
   await checkUser();
-  await loadData(); // 关键：先加载角色数据，不然找不到角色
+  await loadData(); // 关键：先加载角色数据
   const root = $('#message-app');
   if (!currentUser) {
     root.innerHTML = '<div class="empty">请先登录后再查看私信</div>';
@@ -382,6 +392,29 @@ async function initMessage() {
       ${isNewUser ? '⚠️ 注册后 24 小时内不能私信' : `本月剩余额度：${remaining} / 4 条（所有角色合计）`}
     </div>
   `;
+}
+
+async function submitMessage(charHandle) {
+  if (!currentUser) return showToast('请先登录');
+  const input = $('#message-input');
+  const content = input.value.trim();
+  if (!content) return showToast('请输入内容');
+  if (content.length > 1000) return showToast('私信最多1000字');
+
+  // 检查新用户 24 小时墙
+  const { data: { user } } = await db.auth.getUser();
+  const hoursSince = (Date.now() - new Date(user.created_at).getTime()) / 1000 / 3600;
+  if (hoursSince < 24) return showToast('注册后 24 小时内不能私信');
+
+  // 检查本月额度
+  const used = await getMonthlyMessageCount();
+  if (used >= 4) return showToast('本月私信额度已用完（共4条）');
+
+  const { error } = await db.from('messages').insert({ user_id: currentUser.id, character_id: charHandle, content: content });
+  if (error) return showToast('发送失败：' + error.message);
+  showToast('私信已发送，等待管理员回复');
+  input.value = '';
+  await initMessage();
 }
 
 // ===== 10. 页面入口 =====
