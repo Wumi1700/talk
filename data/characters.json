@@ -11,9 +11,9 @@
     "location": "417号航线",
     "verified": "高级福灵",
     "faction": "人类",
-    "follows": ["eileen", "marcus"],
-    "likes": ["2026-09-24-001", "2026-09-24-002"],
-    "bookmarks": ["2026-09-24-003"],
+    "follows": [],
+    "likes": [],
+    "bookmarks": [],
     "privacy": {
       "follows": true,
       "likes": true,
