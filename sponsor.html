@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>赞助 · TALK</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" class="logo">
+        TALK
+        <span class="logo-sub">discover the beauty of life</span>
+      </a>
+      <div class="search-box">
+        <input type="text" placeholder="搜索角色、标签、帖子…">
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="location.href='index.html'">首页</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar-left"></aside>
+
+    <main>
+      <div class="card">
+        <h3>赞助</h3>
+        <p style="margin-top:10px;line-height:2;">
+          TALK 由作者一人独立维护，服务器、存储、图片等费用均由作者自费。<br>
+          如需支持网站长期运作，可查看下方赞助说明。
+        </p>
+      </div>
+
+      <div class="card" style="border-color:#f5c2c7;">
+        <h3 style="color:#b02a37;">赞助说明</h3>
+        <p style="line-height:2;">
+          · 赞助不影响剧情、角色关系、审核结果，仅用于支持网站维护<br>
+          · 赞助不会让角色对赞助者"更好"，也不会让评论更容易通过<br>
+          · 所有赞助商均为小说世界观内的虚构品牌，与现实无关<br>
+          · 作者保留随时终止赞助计划的权力
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>虚构赞助商</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+          以下品牌均为小说世界观内的虚构机构，仅用于世界观扩展，不代表任何真实赞助。
+        </p>
+
+        <div style="border-bottom:1px dashed var(--border);padding-bottom:16px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:15px;">大锻炉工坊</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.9;">
+            所属：矮人 · 铁炉堡<br>
+            百年老字号，专营精工武器、防御装备、家用铁器。<br>
+            品牌语："好铁不打钉，好匠不做假。"
+          </div>
+        </div>
+
+        <div style="border-bottom:1px dashed var(--border);padding-bottom:16px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:15px;">银叶药草堂</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.9;">
+            所属：精灵 · 月影林<br>
+            采集月影林深处珍稀草药，调制疗伤、安神、养颜的秘药。<br>
+            品牌语："森林给的，森林会收回。"
+          </div>
+        </div>
+
+        <div style="border-bottom:1px dashed var(--border);padding-bottom:16px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:15px;">星辰魔法学院</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.9;">
+            所属：人类 · 王都<br>
+            大陆最古老的魔法教育机构，开设元素、符文、咒术、占星四大分院。<br>
+            品牌语："入门者先学规矩，毕业者再忘规矩。"
+          </div>
+        </div>
+
+        <div style="border-bottom:1px dashed var(--border);padding-bottom:16px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:15px;">红枫旅店</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.9;">
+            所属：中立 · 红叶镇<br>
+            红叶镇唯一的旅店，提供住宿、餐饮、马匹租赁。<br>
+            品牌语："喝一杯，睡一觉，明天再赶路。"
+          </div>
+        </div>
+
+        <div style="border-bottom:1px dashed var(--border);padding-bottom:16px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:15px;">417号航线商会</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.9;">
+            所属：中立 · 417号航线<br>
+            经营跨区域空运、信件投递、珍稀物资贸易的商业组织。<br>
+            品牌语："只要给够钱，星都能给你寄到。"
+          </div>
+        </div>
+
+        <div>
+          <div style="font-weight:700;font-size:15px;">月神图书馆</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.9;">
+            所属：精灵 · 银月城<br>
+            收藏大陆最全的历史、地理、语言、符文资料。<br>
+            品牌语："读完了，你就知道该怎么问下一个问题。"
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>其他支持方式</h3>
+        <p style="line-height:2;">
+          如果暂时不想赞助，也可以通过以下方式支持：<br>
+          · 把小说推荐给朋友<br>
+          · 在评论区留下建议或鼓励<br>
+          · 反馈 bug 和想法
+        </p>
+      </div>
+    </main>
+
+    <aside class="sidebar-right"></aside>
+  </div>
+
+  <footer class="footer">
+    <div>本站为小说角色扩展创作，所有角色与事件均为虚构，与现实无关。</div>
+    <div>用户发言不代表本站立场。</div>
+    <div style="margin-top:10px">
+      <a href="about.html">关于</a>·
+      <a href="disclaimer.html">免责声明</a>·
+      <a href="privacy.html">隐私政策</a>·
+      <a href="terms.html">用户协议</a>·
+      <a href="rules.html">规则</a>·
+      <a href="sponsor.html">赞助</a>
+    </div>
+    <div style="margin-top:10px">© 2026 TALK · World</div>
+    <div style="margin-top:8px"><a href="https://wumi1700.github.io/">← 回到正传</a></div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
