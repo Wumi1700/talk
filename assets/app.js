@@ -302,7 +302,123 @@ async function renderCharacterTab(tab, char, posts) {
   }
 }
 
-// ===== 9. 页面入口 =====
+// ===== 9. 私信功能 =====
+async function getMonthlyMessageCount() {
+  if (!currentUser) return 0;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(year, month, 1).toISOString();
+  const { count } = await db.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', firstDay);
+  return count || 0;
+}
+
+async function initMessage() {
+  await checkUser();
+  const root = $('#message-app');
+  if (!currentUser) {
+    root.innerHTML = '<div class="empty">请先登录后再查看私信</div>';
+    return;
+  }
+
+  const params = new URLSearchParams(location.search);
+  const charHandle = params.get('character');
+
+  // 计算本月额度
+  const used = await getMonthlyMessageCount();
+  const remaining = Math.max(0, 4 - used);
+  const quotaEl = $('#quota-display');
+  if (quotaEl) quotaEl.innerHTML = `本月剩余：<b>${remaining}</b> / 4 条`;
+
+  // 如果没指定角色，显示角色列表让用户选
+  if (!charHandle) {
+    const chars = Object.values(CHARACTERS);
+    if (!chars.length) await loadData();
+    root.innerHTML = `
+      <div class="card"><h3>选择一个角色私信</h3></div>
+      ${Object.values(CHARACTERS).map(c => `
+        <a href="message.html?character=${c.handle}" style="text-decoration:none;color:inherit;">
+          <div class="card" style="display:flex;align-items:center;gap:12px;">
+            ${avatarHTML(c)}
+            <div>
+              <div style="font-weight:600;">${c.name}</div>
+              <div style="font-size:13px;color:var(--muted);">@${c.handle}</div>
+            </div>
+          </div>
+        </a>
+      `).join('')}
+    `;
+    return;
+  }
+
+  // 指定角色，显示聊天框
+  const char = CHARACTERS[charHandle];
+  if (!char) { root.innerHTML = '<div class="empty">找不到这个角色</div>'; return; }
+
+  // 检查新用户 24 小时墙
+  const { data: { user } } = await db.auth.getUser();
+  const createdAt = new Date(user.created_at);
+  const hoursSince = (Date.now() - createdAt.getTime()) / 1000 / 3600;
+  const isNewUser = hoursSince < 24;
+
+  // 加载历史消息
+  const { data: msgs } = await db.from('messages').select('*').eq('user_id', currentUser.id).eq('character_id', charHandle).order('created_at', { ascending: true });
+
+  root.innerHTML = `
+    <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      ${avatarHTML(char)}
+      <div style="flex:1;">
+        <div style="font-weight:600;"><a href="character.html?handle=${char.handle}">${char.name}</a></div>
+        <div style="font-size:13px;color:var(--muted);">@${char.handle}</div>
+      </div>
+      <a href="message.html" style="font-size:13px;">← 返回列表</a>
+    </div>
+    <div id="chat-box" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;max-height:500px;overflow-y:auto;margin-bottom:12px;">
+      ${(!msgs || !msgs.length) ? '<div class="empty">还没有对话，发第一条私信吧</div>' : msgs.map(m => {
+        const isMe = m.user_id === currentUser.id;
+        const time = new Date(m.created_at).toLocaleString('zh-CN');
+        return `<div style="margin-bottom:10px;text-align:${isMe?'right':'left'};">
+          <div style="display:inline-block;padding:8px 12px;border-radius:12px;background:${isMe?'var(--primary-light)':'var(--bg)'};max-width:70%;text-align:left;">
+            ${m.content}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">${time}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:8px;">
+      <input id="message-input" type="text" maxlength="1000" placeholder="写私信（最多1000字）" ${isNewUser ? 'disabled' : ''} style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
+      <button class="btn btn-primary" onclick="submitMessage('${charHandle}')" ${isNewUser ? 'disabled' : ''}>发送</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:6px;">
+      ${isNewUser ? '⚠️ 注册后 24 小时内不能私信' : `本月剩余额度：${remaining} / 4 条（所有角色合计）`}
+    </div>
+  `;
+}
+
+async function submitMessage(charHandle) {
+  if (!currentUser) return showToast('请先登录');
+  const input = $('#message-input');
+  const content = input.value.trim();
+  if (!content) return showToast('请输入内容');
+  if (content.length > 1000) return showToast('私信最多1000字');
+
+  // 检查新用户 24 小时墙
+  const { data: { user } } = await db.auth.getUser();
+  const hoursSince = (Date.now() - new Date(user.created_at).getTime()) / 1000 / 3600;
+  if (hoursSince < 24) return showToast('注册后 24 小时内不能私信');
+
+  // 检查本月额度
+  const used = await getMonthlyMessageCount();
+  if (used >= 4) return showToast('本月私信额度已用完（共4条）');
+
+  const { error } = await db.from('messages').insert({ user_id: currentUser.id, character_id: charHandle, content: content });
+  if (error) return showToast('发送失败：' + error.message);
+  showToast('私信已发送，等待管理员回复');
+  input.value = '';
+  await initMessage();
+}
+
+// ===== 10. 页面入口 =====
 async function initHome() {
   await checkUser();
   await loadData();
@@ -352,7 +468,7 @@ async function initCharacter() {
         ${avatarHTML(char, 'large')}
         <div class="profile-actions">
           <button class="${followBtnClass}" onclick="toggleFollow('${char.handle}', this)">${followBtnText}</button>
-          <button class="btn" onclick="showToast('私信功能即将上线')">私信</button>
+          <button class="btn" onclick="location.href='message.html?character=${char.handle}'">私信</button>
         </div>
       </div>
       <div class="profile-name">${char.name} ${char.verified ? `<span class="verified">✓ ${char.verified}</span>` : ''}</div>
@@ -365,12 +481,12 @@ async function initCharacter() {
         <span><b>${char.following || 0}</b> 关注</span>
       </div>
     </div>
-      <div class="profile-tabs" id="profile-tabs">
-        <button class="active" data-tab="posts">动态</button>
-        ${(char.privacy || {}).follows !== false ? '<button data-tab="follows">关注</button>' : ''}
-        ${(char.privacy || {}).likes !== false ? '<button data-tab="likes">点赞</button>' : ''}
-        ${(char.privacy || {}).bookmarks !== false ? '<button data-tab="bookmarks">收藏</button>' : ''}
-      </div>
+    <div class="profile-tabs" id="profile-tabs">
+      <button class="active" data-tab="posts">动态</button>
+      ${(char.privacy || {}).follows !== false ? '<button data-tab="follows">关注</button>' : ''}
+      ${(char.privacy || {}).likes !== false ? '<button data-tab="likes">点赞</button>' : ''}
+      ${(char.privacy || {}).bookmarks !== false ? '<button data-tab="bookmarks">收藏</button>' : ''}
+    </div>
     <div id="tab-content"></div>
   `;
 
