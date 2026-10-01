@@ -686,16 +686,20 @@ async function deleteAccount() {
 async function renderSidebar() {
   const sidebar = document.querySelector('.sidebar-left');
   if (!sidebar) return;
-  
+
+  // 【新增】打开任何页面时，检测角色新回复，自动生成通知
+  if (currentUser) {
+    await checkNewReplies();
+  }
+
   const path = location.pathname.split('/').pop() || 'index.html';
-  
+
   // 查询未读数
   let unread = 0;
   if (currentUser) {
     unread = await getUnreadCount();
   }
 
-  // 还没建的页面，用 onclick 拦截
   const links = [
     { href: 'index.html', icon: '🏠', text: '首页' },
     { href: '#', icon: '👥', text: '角色目录', alert: '角色目录正在建设中' },
@@ -721,10 +725,34 @@ async function renderSidebar() {
   `;
 }
 
+// 【新增】检测角色新回复，自动生成通知
+async function checkNewReplies() {
+  if (!currentUser) return;
+  // 找出所有“角色发来的、还没通知过的”消息
+  const { data: newMsgs } = await db.from('messages')
+    .select('id, character_id, content')
+    .eq('user_id', currentUser.id)
+    .eq('is_from_character', true)
+    .eq('notified', false);
+
+  if (!newMsgs || !newMsgs.length) return;
+
+  // 对每条消息，生成一条通知
+  for (const m of newMsgs) {
+    await db.from('notifications').insert({
+      user_id: currentUser.id,
+      type: 'message',
+      target_id: '角色 ' + m.character_id + ' 回复了你：' + m.content.slice(0, 30),
+      is_read: false
+    });
+    await db.from('messages').update({ notified: true }).eq('id', m.id);
+  }
+}
+
 // 页面加载时自动执行
 document.addEventListener('DOMContentLoaded', async () => {
   await checkUser();
-  renderSidebar();
+  await renderSidebar();
 });
 
 // ===== 14. 通知中心 =====
