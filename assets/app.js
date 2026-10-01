@@ -370,7 +370,7 @@ async function initMessage() {
     </div>
     <div id="chat-box" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;max-height:500px;overflow-y:auto;margin-bottom:12px;">
       ${(!msgs || !msgs.length) ? '<div class="empty">还没有对话，发第一条私信吧</div>' : msgs.map(m => {
-        const isMe = m.user_id === currentUser.id;
+        const isMe = !m.is_from_character;
         const time = new Date(m.created_at).toLocaleString('zh-CN');
         return `<div style="margin-bottom:10px;text-align:${isMe?'right':'left'};">
           <div style="display:inline-block;padding:8px 12px;border-radius:12px;background:${isMe?'var(--primary-light)':'var(--bg)'};max-width:70%;text-align:left;">
