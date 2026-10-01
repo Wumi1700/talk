@@ -673,3 +673,36 @@ async function deleteAccount() {
     showToast('删除失败，请联系管理员');
   }
 }
+
+// ===== 13. 全站侧边栏自动生成 =====
+function renderSidebar() {
+  const sidebar = document.querySelector('.sidebar-left');
+  if (!sidebar) return;
+  
+  // 获取当前页面文件名，用于高亮
+  const path = location.pathname.split('/').pop() || 'index.html';
+  
+  const links = [
+    { href: 'index.html', icon: '🏠', text: '首页' },
+    { href: 'directory.html', icon: '👥', text: '角色目录' }, // 以后建
+    { href: 'tags.html', icon: '#️⃣', text: '标签' },       // 以后建
+    { href: 'locations.html', icon: '📍', text: '地点' },   // 以后建
+    { href: 'notifications.html', icon: '🔔', text: '通知' }, // 以后建
+    { href: 'message.html', icon: '✉️', text: '私信' },
+    { href: 'profile.html', icon: '👤', text: '我的主页' },
+    { href: 'settings.html', icon: '⚙️', text: '设置' }
+  ];
+
+  sidebar.innerHTML = `
+    <nav>
+      ${links.map(l => `
+        <a href="${l.href}" class="${path === l.href ? 'active' : ''}">
+          <span class="icon">${l.icon}</span> ${l.text}
+        </a>
+      `).join('')}
+    </nav>
+  `;
+}
+
+// 页面加载时自动执行
+document.addEventListener('DOMContentLoaded', renderSidebar);
