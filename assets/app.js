@@ -123,16 +123,28 @@ function showBannedScreen() {
   if (typeof renderSidebar === 'function') renderSidebar();
 }
 
+async function handleLogin() {
+  const email = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) return showToast('请填写邮箱和密码');
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if (error) return showToast('登录失败：' + error.message);
+  showToast('欢迎回来');
+  closeAuthModal();
+  await checkUser();
+  location.reload();
+}
+
 async function handleRegister() {
   const email = $('#auth-email').value, password = $('#auth-password').value;
   if (!email || !password || password.length < 6) return showToast('密码至少6位');
   const { error } = await db.auth.signUp({ email, password });
   if (error) return showToast('注册失败：' + error.message);
-  showToast('注册成功！请选择阵营'); closeAuthModal(); checkUser();
+  showToast('你已踏入这个世界，请选择阵营'); closeAuthModal(); checkUser();
 }
 async function handleLogout() {
   await db.auth.signOut(); currentUser = null; currentProfile = null;
-  showToast('已退出'); updateUIForLoggedOut(); location.reload();
+  showToast('你离开了 TALK'); updateUIForLoggedOut(); location.reload();
 }
 async function chooseFaction(faction) {
   if (!currentUser) return;
