@@ -57,6 +57,7 @@ async function checkUser() {
     currentProfile = profile;
     if (!profile) {
       openFactionModal();
+      setTimeout(() => openFactionModal(), 300);
     } else if (profile.is_banned) {
       showBannedScreen();
       return;
