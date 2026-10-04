@@ -1242,3 +1242,95 @@ async function submitReport(targetType, targetId) {
   closeReportModal();
   showToast('举报已提交，管理员会尽快处理');
 }
+
+// ===== 20. 管理后台 =====
+const ADMIN_EMAILS = ['wuumiii@outlook.com']; // ← 改成你自己的邮箱
+
+function isAdmin() {
+  return currentUser && ADMIN_EMAILS.includes(currentUser.email);
+}
+
+async function initAdmin() {
+  await checkUser();
+  const root = $('#admin-app');
+  if (!currentUser) {
+    root.innerHTML = '<div class="empty">请先登录</div>';
+    return;
+  }
+  if (!isAdmin()) {
+    root.innerHTML = '<div class="empty">无权访问</div>';
+    return;
+  }
+
+  // 加载待处理举报
+  const { data: reports, error } = await db.from('reports').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+  if (error) { root.innerHTML = '<div class="empty">加载失败：' + error.message + '</div>'; return; }
+
+  if (!reports || !reports.length) {
+    root.innerHTML = `
+      <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
+        <h3>管理后台</h3>
+        <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">当前没有待处理举报。</p>
+      </div>
+    `;
+    return;
+  }
+
+  // 一次性把涉及到的评论查出来
+  const commentIds = reports.filter(r => r.target_type === 'comment').map(r => r.target_id);
+  const { data: comments } = await db.from('comments').select('id, content, post_id, user_id, status').in('id', commentIds);
+  const commentMap = {};
+  (comments || []).forEach(c => { commentMap[c.id] = c; });
+
+  root.innerHTML = `
+    <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
+      <h3>管理后台</h3>
+      <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">待处理举报：${reports.length} 条</p>
+    </div>
+    ${reports.map(r => {
+      const c = commentMap[r.target_id];
+      const commentText = c ? c.content : '（评论不存在或已被删除）';
+      const commentStatus = c ? c.status : 'unknown';
+      const time = new Date(r.created_at).toLocaleString('zh-CN');
+      return `
+        <div class="card" style="border-color:#f5c2c7;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">
+                举报原因：<b>${r.reason}</b> · ${time}
+              </div>
+              <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">被举报内容：</div>
+              <div style="background:var(--bg);padding:10px;border-radius:6px;font-size:14px;word-break:break-word;">${commentText}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:6px;">
+                帖子 ID：${c ? c.post_id : '未知'} · 当前状态：${commentStatus}
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0;">
+              ${c && commentStatus === 'visible'
+                ? `<button class="btn" style="border-color:#dc3545;color:#dc3545;" onclick="adminHideComment('${r.id}', '${c.id}')">隐藏评论</button>`
+                : '<span style="font-size:12px;color:var(--muted);">评论已隐藏</span>'}
+              <button class="btn" onclick="adminIgnoreReport('${r.id}')">忽略举报</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+async function adminHideComment(reportId, commentId) {
+  const ok = confirm('确定隐藏这条评论吗？隐藏后用户将看不到它。');
+  if (!ok) return;
+  await db.from('comments').update({ status: 'hidden' }).eq('id', commentId);
+  await db.from('reports').update({ status: 'handled' }).eq('id', reportId);
+  showToast('评论已隐藏');
+  await initAdmin();
+}
+
+async function adminIgnoreReport(reportId) {
+  const ok = confirm('确定忽略这条举报吗？');
+  if (!ok) return;
+  await db.from('reports').update({ status: 'rejected' }).eq('id', reportId);
+  showToast('举报已忽略');
+  await initAdmin();
+}
