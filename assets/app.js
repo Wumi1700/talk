@@ -703,7 +703,7 @@ async function renderSidebar() {
   const links = [
     { href: 'index.html', icon: '🏠', text: '首页' },
     { href: '#', icon: '👥', text: '角色目录', alert: '角色目录正在建设中' },
-    { href: '#', icon: '⚔️', text: '阵营论坛', alert: '阵营论坛正在建设中' },
+    { href: 'forum.html', icon: '⚔️', text: '阵营论坛' },
     { href: 'notifications.html', icon: '🔔', text: '通知', badge: unread },
     { href: 'message.html', icon: '✉️', text: '私信' },
     { href: 'profile.html', icon: '👤', text: '我的主页' },
@@ -821,4 +821,51 @@ async function markRead(id) {
   await db.from('notifications').update({ is_read: true }).eq('id', id);
   await initNotifications();
   await renderSidebar();
+}
+
+// ===== 15. 阵营论坛 =====
+let FORUM_POSTS = [];
+
+async function loadForumData() {
+  try {
+    const res = await fetch('posts/forum.json');
+    const data = await res.json();
+    FORUM_POSTS = await Promise.all(data.posts.map(async p => {
+      const r = await fetch(p.file);
+      const text = await r.text();
+      const { data: fm, content } = parseFrontMatter(text);
+      return { id: p.id, ...fm, content };
+    }));
+  } catch (e) {
+    FORUM_POSTS = [];
+  }
+}
+
+async function initForum() {
+  await checkUser();
+  await loadData();
+  await loadForumData();
+  const root = $('#forum-app');
+  if (!currentUser) {
+    root.innerHTML = '<div class="empty">请先登录后再进入阵营论坛</div>';
+    return;
+  }
+  if (!currentProfile || !currentProfile.faction) {
+    root.innerHTML = '<div class="empty">请先选择阵营</div>';
+    return;
+  }
+  const myFaction = currentProfile.faction;
+  const myPosts = FORUM_POSTS.filter(p => p.faction === myFaction);
+
+  root.innerHTML = `
+    <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
+      <h3>${myFaction} · 阵营论坛</h3>
+      <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">
+        这里只有 ${myFaction} 阵营的成员能看到。
+      </p>
+    </div>
+    ${myPosts.length
+      ? (await Promise.all(myPosts.map(renderPostCard))).join('')
+      : '<div class="empty">这个阵营还没有帖子</div>'}
+  `;
 }
