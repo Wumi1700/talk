@@ -1,25 +1,42 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+:root {
+  --primary: #8E8E9C;
+  --primary-dark: #5E5E6B;
+  --primary-light: #EEEEF2;
+  --page-bg: #F2F3F5;
+  --bg: #F0F8FF;
+  --card: #FFFFFF;
+  --text: #1A2B3C;
+  --text-muted: #6B7C8C;
+  --border: #D6E9F5;
+  --radius: 12px;
+  --danger: #E76F51;
+}
+
 /* ===== 阵营主题色 ===== */
 body.faction-elf {
-  --primary: #5BA87E;
-  --primary-dark: #3E7E5A;
-  --primary-light: #EBF6F0;
+  --primary: #4A9B6E;
+  --primary-dark: #2E6B4A;
+  --primary-light: #D8EEE0;
+  --page-bg: #EFF7F1;
 }
 body.faction-dwarf {
-  --primary: #C28A52;
-  --primary-dark: #96663A;
-  --primary-light: #F9F0E5;
+  --primary: #B8834A;
+  --primary-dark: #8A5E2E;
+  --primary-light: #F0E2CC;
+  --page-bg: #FAF4EA;
 }
 body.faction-human {
-  --primary: #5B8DC9;
-  --primary-dark: #3E6BA0;
-  --primary-light: #EBF2FA;
+  --primary: #3E6BA0;
+  --primary-dark: #2A4E7A;
+  --primary-light: #D8E4F5;
+  --page-bg: #EEF3FA;
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: var(--bg);
+  background: var(--page-bg);
   color: var(--text);
   line-height: 1.6;
   font-size: 15px;
@@ -117,6 +134,7 @@ a:hover { text-decoration: underline; }
 .post {
   background: var(--card);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
   border-radius: var(--radius);
   padding: 18px;
   margin-bottom: 16px;
