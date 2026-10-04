@@ -10,6 +10,22 @@ let currentProfile = null;
 // ===== 3. 工具函数 =====
 function $(sel, root = document) { return root.querySelector(sel); }
 function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
+// ===== 阵营图标 =====
+function factionIcon(faction) {
+  if (faction === '精灵') return '🦌';
+  if (faction === '矮人') return '⚒️';
+  if (faction === '人类') return '⭐';
+  return '';
+}
+
+// ===== 应用阵营主题 =====
+function applyFactionTheme() {
+  document.body.classList.remove('faction-elf', 'faction-dwarf', 'faction-human');
+  if (!currentProfile || !currentProfile.faction) return;
+  if (currentProfile.faction === '精灵') document.body.classList.add('faction-elf');
+  else if (currentProfile.faction === '矮人') document.body.classList.add('faction-dwarf');
+  else if (currentProfile.faction === '人类') document.body.classList.add('faction-human');
+}
 function showToast(msg) {
   let t = $('#toast');
   if (!t) { t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
@@ -57,9 +73,9 @@ async function checkUser() {
     currentProfile = profile;
     if (!profile) {
       openFactionModal();
-      setTimeout(() => openFactionModal(), 300);
     } else if (profile.is_banned) {
       showBannedScreen();
+      applyFactionTheme();
       return;
     } else {
       updateUIForLoggedIn();
@@ -67,13 +83,14 @@ async function checkUser() {
   } else {
     updateUIForLoggedOut();
   }
+  applyFactionTheme();
   if (typeof renderSidebar === 'function') await renderSidebar();
 }
 
 function updateUIForLoggedIn() {
   const actions = document.querySelector('.topbar-actions');
   if (actions && currentProfile) {
-    actions.innerHTML = `<span style="font-size:14px;font-weight:600;">[${currentProfile.faction}] ${currentProfile.username || '用户'}</span><button class="btn" onclick="handleLogout()">退出</button>`;
+    actions.innerHTML = `<span style="font-size:14px;font-weight:600;">${factionIcon(currentProfile.faction)}[${currentProfile.faction}] ${currentProfile.username || '用户'}</span><button class="btn" onclick="handleLogout()">退出</button>`;
   }
 }
 
@@ -211,7 +228,7 @@ async function renderPostCard(post) {
       <div class="post-header">
         ${avatarHTML(char)}
         <div class="post-meta">
-          <div class="post-name"><a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
+          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
           <div class="post-sub">@${char.handle} · ${post.date || ''}${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
