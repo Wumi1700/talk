@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 · TALK</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a href="index.html" class="logo">
+        TALK
+        <span class="logo-sub">discover the beauty of life</span>
+      </a>
+      <div class="search-box">
+        <input type="text" placeholder="搜索角色、标签、帖子…">
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="openAuthModal()">登录</button>
+        <button class="btn btn-primary" onclick="openAuthModal()">注册</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="auth-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:24px;border-radius:12px;width:90%;max-width:400px;">
+      <h2 style="margin-bottom:16px;color:var(--primary-dark);">TALK 账号</h2>
+      <input id="auth-email" type="email" placeholder="邮箱" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid var(--border);border-radius:8px;">
+      <input id="auth-password" type="password" placeholder="密码（至少6位）" style="width:100%;padding:10px;margin-bottom:10px;border:1px solid var(--border);border-radius:8px;">
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary" onclick="handleLogin()" style="flex:1;">登录</button>
+        <button class="btn" onclick="handleRegister()" style="flex:1;">注册</button>
+      </div>
+      <button class="btn" onclick="closeAuthModal()" style="width:100%;margin-top:10px;">取消</button>
+    </div>
+  </div>
+
+  <div id="faction-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:24px;border-radius:12px;width:90%;max-width:400px;">
+      <h2 style="margin-bottom:10px;color:var(--primary-dark);">选择你的阵营</h2>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">阵营选定后 3 个月内不可更改。</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn" onclick="chooseFaction('精灵')" style="padding:16px;font-size:16px;">🧝 精灵 · 旅人</button>
+        <button class="btn" onclick="chooseFaction('矮人')" style="padding:16px;font-size:16px;">⚒️ 矮人 · 锻造学徒</button>
+        <button class="btn" onclick="chooseFaction('人类')" style="padding:16px;font-size:16px;">🧙 人类 · 见习法师</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar-left"></aside>
+
+    <main id="admin-app">
+      <div class="empty">加载中…</div>
+    </main>
+
+    <aside class="sidebar-right"></aside>
+  </div>
+
+  <footer class="footer">
+    <div>本站为小说角色扩展创作，所有角色与事件均为虚构，与现实无关。</div>
+    <div>用户发言不代表本站立场。</div>
+    <div style="margin-top:10px">
+      <a href="about.html">关于</a>·
+      <a href="disclaimer.html">免责声明</a>·
+      <a href="privacy.html">隐私政策</a>·
+      <a href="terms.html">用户协议</a>·
+      <a href="rules.html">规则</a>·
+      <a href="sponsor.html">赞助</a>
+    </div>
+    <div style="margin-top:10px">© 2026 TALK · World</div>
+    <div style="margin-top:8px"><a href="https://wumi1700.github.io/">← 回到正传</a></div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+  <script>initAdmin();</script>
+</body>
+</html>
