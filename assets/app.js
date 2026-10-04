@@ -137,11 +137,25 @@ async function handleLogin() {
 }
 
 async function handleRegister() {
-  const email = $('#auth-email').value, password = $('#auth-password').value;
+  const email = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-password').value;
   if (!email || !password || password.length < 6) return showToast('密码至少6位');
-  const { error } = await db.auth.signUp({ email, password });
+
+  const { data, error } = await db.auth.signUp({ email, password });
   if (error) return showToast('注册失败：' + error.message);
-  showToast('你已踏入这个世界，请选择阵营'); closeAuthModal(); checkUser();
+
+  showToast('你已踏入这个世界，请选择阵营');
+  closeAuthModal();
+
+  // 同步当前用户
+  const { data: { user } } = await db.auth.getUser();
+  currentUser = user;
+
+  // 直接弹阵营窗口，不依赖 checkUser
+  setTimeout(() => {
+    const m = document.getElementById('faction-modal');
+    if (m) m.style.display = 'flex';
+  }, 300);
 }
 async function handleLogout() {
   await db.auth.signOut(); currentUser = null; currentProfile = null;
