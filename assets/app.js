@@ -445,6 +445,7 @@ async function initProfile() {
       <button class="active" data-tab="likes">我的点赞</button>
       <button data-tab="bookmarks">我的收藏</button>
       <button data-tab="comments">我的评论</button>
+      <button data-tab="follows">我的关注</button>
     </div>
     <div id="user-tab-content"></div>
   `;
@@ -453,6 +454,23 @@ async function initProfile() {
     const container = $('#user-tab-content');
     container.innerHTML = '<div class="empty">加载中...</div>';
 
+    if (tab === 'follows') {
+  const { data: followData } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
+  const ids = (followData || []).map(f => f.character_id);
+  const followedChars = ids.map(id => CHARACTERS[id]).filter(Boolean);
+  if (!followedChars.length) return container.innerHTML = '<div class="empty">你还没有关注任何角色</div>';
+  container.innerHTML = followedChars.map(c => `
+    <div class="card" style="display:flex;align-items:center;gap:12px;">
+      ${avatarHTML(c)}
+      <div style="flex:1;">
+        <div style="font-weight:600;"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
+        <div style="font-size:13px;color:var(--muted);">@${c.handle} · ${c.bio || ''}</div>
+      </div>
+      <button class="btn btn-primary" onclick="unfollowFromProfile('${c.handle}', this)">已关注</button>
+    </div>
+  `).join('');
+  return;
+}
     if (tab === 'likes') {
       const { data: likesData } = await db.from('likes').select('post_id').eq('user_id', currentUser.id);
       const ids = (likesData || []).map(l => l.post_id);
@@ -589,6 +607,13 @@ async function initPost() {
   `;
 }
 
+async function unfollowFromProfile(handle, btn) {
+  if (!currentUser) return;
+  await db.from('follows').delete().eq('character_id', handle).eq('user_id', currentUser.id);
+  showToast('已取消关注');
+  btn.closest('.card').remove();
+}
+
 // ===== 12. 设置页 =====
 async function initSettings() {
   await checkUser();
@@ -702,7 +727,6 @@ async function renderSidebar() {
 
   const links = [
     { href: 'index.html', icon: '🏠', text: '首页' },
-    { href: '#', icon: '👥', text: '角色目录', alert: '角色目录正在建设中' },
     { href: 'forum.html', icon: '⚔️', text: '阵营论坛' },
     { href: 'notifications.html', icon: '🔔', text: '通知', badge: unread },
     { href: 'message.html', icon: '✉️', text: '私信' },
