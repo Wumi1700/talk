@@ -708,10 +708,27 @@ async function initHome() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
+
+  // 查询当前用户关注了哪些角色
+  let followedChars = [];
+  if (currentUser) {
+    const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
+    followedChars = (follows || []).map(f => f.character_id);
+  }
+
+  // 排序：已关注角色的帖子优先，其他按时间倒序
+  const sortedPosts = [...POSTS].sort((a, b) => {
+    const aF = followedChars.includes(a.character) ? 1 : 0;
+    const bF = followedChars.includes(b.character) ? 1 : 0;
+    if (aF !== bF) return bF - aF;
+    return (b.date || '').localeCompare(a.date || '');
+  });
+
   const feed = $('#feed');
-  if (!POSTS.length) { feed.innerHTML = '<div class="empty">还没有动态</div>'; return; }
-  const html = await Promise.all(POSTS.map(renderPostCard));
+  if (!sortedPosts.length) { feed.innerHTML = '<div class="empty">还没有动态</div>'; return; }
+  const html = await Promise.all(sortedPosts.map(renderPostCard));
   feed.innerHTML = html.join('');
+
   const rec = $('#recommend');
   if (rec) {
     rec.innerHTML = Object.values(CHARACTERS).map(c => `
