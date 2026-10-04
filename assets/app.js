@@ -270,6 +270,7 @@ async function loadComments(postId) {
             ♡ <span>${count}</span>
           </button>
           <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
+          <button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>
         </div>
         <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
           <div style="display:flex;gap:6px;">
@@ -1180,4 +1181,64 @@ async function containsSensitiveWord(text) {
     if (lower.includes(w.toLowerCase())) return true;
   }
   return false;
+}
+
+// ===== 19. 举报功能 =====
+function openReportModal(targetType, targetId) {
+  if (!currentUser) return showToast('请先登录');
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
+  if (document.getElementById('report-modal')) document.getElementById('report-modal').remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'report-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;padding:24px;border-radius:12px;width:90%;max-width:400px;">
+      <h3 style="margin-bottom:14px;color:var(--primary-dark);">举报内容</h3>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">请选择举报原因：</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="font-size:14px;"><input type="radio" name="report-reason" value="广告、外链、诈骗"> 广告、外链、诈骗</label>
+        <label style="font-size:14px;"><input type="radio" name="report-reason" value="辱骂、人身攻击"> 辱骂、人身攻击</label>
+        <label style="font-size:14px;"><input type="radio" name="report-reason" value="歧视"> 歧视</label>
+        <label style="font-size:14px;"><input type="radio" name="report-reason" value="恶意剧透"> 恶意剧透</label>
+        <label style="font-size:14px;"><input type="radio" name="report-reason" value="刷屏、重复内容"> 刷屏、重复内容</label>
+        <label style="font-size:14px;"><input type="radio" name="report-reason" value="其他"> 其他</label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:20px;">
+        <button class="btn btn-primary" onclick="submitReport('${targetType}', '${targetId}')" style="flex:1;">提交举报</button>
+        <button class="btn" onclick="closeReportModal()" style="flex:1;">取消</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function closeReportModal() {
+  const m = document.getElementById('report-modal');
+  if (m) m.remove();
+}
+
+async function submitReport(targetType, targetId) {
+  if (!currentUser) return showToast('请先登录');
+  const selected = document.querySelector('input[name="report-reason"]:checked');
+  if (!selected) return showToast('请选择举报原因');
+
+  // 检查是否已举报过同一内容
+  const { data: existing } = await db.from('reports')
+    .select('id').eq('reporter_id', currentUser.id)
+    .eq('target_type', targetType).eq('target_id', targetId).limit(1);
+  if (existing && existing.length) {
+    closeReportModal();
+    return showToast('你已经举报过这条内容');
+  }
+
+  const { error } = await db.from('reports').insert({
+    reporter_id: currentUser.id,
+    target_type: targetType,
+    target_id: targetId,
+    reason: selected.value
+  });
+  if (error) return showToast('举报失败：' + error.message);
+  closeReportModal();
+  showToast('举报已提交，管理员会尽快处理');
 }
