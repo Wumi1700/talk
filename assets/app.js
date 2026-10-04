@@ -26,6 +26,20 @@ function applyFactionTheme() {
   else if (currentProfile.faction === '矮人') document.body.classList.add('faction-dwarf');
   else if (currentProfile.faction === '人类') document.body.classList.add('faction-human');
 }
+function relativeTime(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+  if (diff < 86400 * 7) return Math.floor(diff / 86400) + ' 天前';
+  if (diff < 86400 * 30) return Math.floor(diff / 86400 / 7) + ' 周前';
+  if (diff < 86400 * 365) return Math.floor(diff / 86400 / 30) + ' 个月前';
+  return Math.floor(diff / 86400 / 365) + ' 年前';
+}
 function showToast(msg) {
   let t = $('#toast');
   if (!t) { t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
