@@ -394,7 +394,7 @@ async function submitComment(postId) {
 
   const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content });
   if (error) return showToast('评论失败：' + error.message);
-  showToast('评论成功！');
+  showToast('你说了一句话');
   input.value = '';
   await loadComments(postId);
   const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
@@ -413,7 +413,7 @@ async function toggleFollow(charHandle, btn) {
     btn.textContent = '+ 关注';
     const countEl = document.getElementById('follower-count');
     if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent) - 1);
-    showToast('已取消关注');
+    showToast('你暂时放下了他');
   } else {
     await db.from('follows').insert({ character_id: charHandle, user_id: currentUser.id });
     btn.classList.add('following', 'btn-primary');
@@ -421,7 +421,7 @@ async function toggleFollow(charHandle, btn) {
     btn.textContent = '已关注';
     const countEl = document.getElementById('follower-count');
     if (countEl) countEl.textContent = parseInt(countEl.textContent) + 1;
-    showToast('已关注 ' + charHandle);
+    showToast('你已经记住了 ' + charHandle);
   }
 }
 
@@ -584,7 +584,7 @@ async function submitMessage(charHandle) {
   is_read: false
 });
   
-  showToast('私信已发送，等待管理员回复');
+  showToast('信已经送出去了');
   input.value = '';
   await initMessage();
 }
@@ -785,7 +785,7 @@ async function initPost() {
 async function unfollowFromProfile(handle, btn) {
   if (!currentUser) return;
   await db.from('follows').delete().eq('character_id', handle).eq('user_id', currentUser.id);
-  showToast('已取消关注');
+  showToast('你暂时放下了他');
   btn.closest('.card').remove();
 }
 
@@ -846,7 +846,7 @@ async function updateUsername() {
   const { error } = await db.from('profiles').update({ username: newName }).eq('id', currentUser.id);
   if (error) return showToast('修改失败：' + error.message);
   currentProfile.username = newName;
-  showToast('昵称已更新');
+  showToast('你换了个称呼');
   updateUIForLoggedIn();
 }
 
@@ -857,7 +857,7 @@ async function updatePassword() {
   if (p1 !== p2) return showToast('两次输入的密码不一致');
   const { error } = await db.auth.updateUser({ password: p1 });
   if (error) return showToast('修改失败：' + error.message);
-  showToast('密码已修改');
+  showToast('新口令已生效');
   $('#new-password').value = '';
   $('#new-password2').value = '';
 }
