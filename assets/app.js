@@ -243,7 +243,7 @@ async function renderPostCard(post) {
         ${avatarHTML(char)}
         <div class="post-meta">
           <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
-          <div class="post-sub">@${char.handle} · ${post.date || ''}${post.location ? ' · 📍'+post.location : ''}</div>
+          <div class="post-sub">@${char.handle} · ${relativeTime(post.date)}${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
       <div class="post-body">${renderMarkdown(post.content)}</div>
