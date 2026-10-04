@@ -1291,7 +1291,7 @@ async function submitReport(targetType, targetId) {
 }
 
 // ===== 20. 管理后台 =====
-const ADMIN_EMAILS = ['wuumiii@outlook.com']; // ← 改成你自己的邮箱
+const ADMIN_EMAILS = ['wuumii@outlook.com']; // ← 改成你自己的邮箱
 
 function isAdmin() {
   return currentUser && ADMIN_EMAILS.includes(currentUser.email);
