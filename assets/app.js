@@ -245,6 +245,10 @@ async function loadComments(postId) {
 }
 
 async function submitComment(postId) {
+  if (!wordSensor) await initWordSensor();
+if (containsSensitiveWord(content)) {
+  return showToast('你的内容包含敏感词，请修改后重试');
+}
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const input = document.getElementById(`comment-input-${postId}`);
@@ -425,6 +429,10 @@ async function initMessage() {
 }
 
 async function submitMessage(charHandle) {
+  if (!wordSensor) await initWordSensor();
+if (containsSensitiveWord(content)) {
+  return showToast('你的内容包含敏感词，请修改后重试');
+}
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const input = $('#message-input');
@@ -1036,4 +1044,40 @@ async function initSearch() {
   }
 
   root.innerHTML = html;
+}
+
+// ===== 18. 敏感词过滤 =====
+let wordSensor = null;
+
+async function initWordSensor() {
+  try {
+    const files = ['广告.txt', '政治类.txt', '色情类.txt', '涉枪涉爆违法信息关键词.txt'];
+    const words = [];
+
+    for (const file of files) {
+      const res = await fetch('words/' + file);
+      const text = await res.text();
+      // 处理逗号分隔和换行分隔两种格式
+      text.split(/[,\n]/).forEach(w => {
+        const trimmed = w.trim();
+        if (trimmed) words.push(trimmed);
+      });
+    }
+
+    wordSensor = new WordSensor({
+      words: words,
+      maskChar: '*',
+      caseInsensitive: true
+    });
+    console.log('敏感词库加载完成，共 ' + words.length + ' 条');
+  } catch (e) {
+    console.error('敏感词库加载失败：', e);
+  }
+}
+
+function containsSensitiveWord(text) {
+  if (!wordSensor) return false;
+  // detect 方法返回检测到的敏感词数组
+  const detected = wordSensor.detect(text);
+  return detected && detected.length > 0;
 }
