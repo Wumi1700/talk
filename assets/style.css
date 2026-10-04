@@ -47,8 +47,9 @@ a:hover { text-decoration: underline; }
 
 .topbar {
   position: sticky; top: 0; z-index: 100;
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(10px);
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid var(--border);
 }
 .topbar-inner {
@@ -132,15 +133,15 @@ a:hover { text-decoration: underline; }
 }
 
 .post {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  border-radius: var(--radius);
-  padding: 18px;
-  margin-bottom: 16px;
-  transition: box-shadow 0.15s;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 16px 20px;
+  margin-bottom: 0;
+  transition: background 0.15s;
 }
-.post:hover { box-shadow: 0 4px 16px rgba(91,192,235,0.12); }
+.post:hover { background: rgba(0,0,0,0.02); }
 .post-header {
   display: flex; align-items: center; gap: 12px;
   margin-bottom: 12px;
@@ -188,17 +189,20 @@ a:hover { text-decoration: underline; }
 .tag:hover { text-decoration: underline; }
 
 .post-actions {
-  display: flex; gap: 24px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  display: flex; gap: 12px;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: none;
 }
 .action {
   display: flex; align-items: center; gap: 6px;
   color: var(--text-muted); font-size: 14px;
   cursor: pointer; background: none; border: none;
-  padding: 4px 0; font-family: inherit;
+  padding: 6px 10px; font-family: inherit;
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
 }
-.action:hover { color: var(--primary-dark); }
+.action:hover { color: var(--primary-dark); background: var(--primary-light); }
 .action.liked { color: var(--danger); }
 .action.bookmarked { color: var(--primary-dark); }
 
