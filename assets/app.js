@@ -55,32 +55,38 @@ async function checkUser() {
   if (user) {
     const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
     currentProfile = profile;
-    if (!profile) { openFactionModal(); } else { updateUIForLoggedIn(); }
-  } else { updateUIForLoggedOut(); }
+    if (!profile) {
+      openFactionModal();
+    } else if (profile.is_banned) {
+      showBannedScreen();
+      return;
+    } else {
+      updateUIForLoggedIn();
+    }
+  } else {
+    updateUIForLoggedOut();
+  }
   if (typeof renderSidebar === 'function') await renderSidebar();
 }
-function updateUIForLoggedIn() {
-  const actions = $('.topbar-actions');
-  if (actions && currentProfile) {
-    actions.innerHTML = `<span style="font-size:14px;font-weight:600;">[${currentProfile.faction}] ${currentProfile.username || '用户'}</span><button class="btn" onclick="handleLogout()">退出</button>`;
-  }
+
+function showBannedScreen() {
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px;">
+      <div style="max-width:480px;text-align:center;background:#fff;border:1px solid var(--border);border-radius:16px;padding:48px 32px;">
+        <div style="font-size:64px;margin-bottom:16px;">🚪</div>
+        <h2 style="font-size:24px;font-weight:800;margin-bottom:12px;color:var(--text);">你已被放逐</h2>
+        <p style="font-size:14px;color:var(--muted);line-height:1.9;">
+          你的账号因违反社区规则，已被移出这个世界。<br>
+          你仍可以浏览内容，但无法进行任何互动。
+        </p>
+        <p style="font-size:13px;color:var(--muted);margin-top:20px;">
+          如有异议，请联系管理员。
+        </p>
+      </div>
+    </div>
+  `;
 }
-function updateUIForLoggedOut() {
-  const actions = $('.topbar-actions');
-  if (actions) {
-    actions.innerHTML = `<button class="btn" onclick="openAuthModal()">登录</button><button class="btn btn-primary" onclick="openAuthModal()">注册</button>`;
-  }
-}
-function openAuthModal() { $('#auth-modal').style.display = 'flex'; }
-function closeAuthModal() { $('#auth-modal').style.display = 'none'; }
-function openFactionModal() { $('#faction-modal').style.display = 'flex'; }
-async function handleLogin() {
-  const email = $('#auth-email').value, password = $('#auth-password').value;
-  if (!email || !password) return showToast('请填写邮箱和密码');
-  const { error } = await db.auth.signInWithPassword({ email, password });
-  if (error) return showToast('登录失败：' + error.message);
-  showToast('登录成功！'); closeAuthModal(); checkUser();
-}
+
 async function handleRegister() {
   const email = $('#auth-email').value, password = $('#auth-password').value;
   if (!email || !password || password.length < 6) return showToast('密码至少6位');
@@ -162,6 +168,7 @@ async function renderPostCard(post) {
 
 // ===== 6. 互动功能 =====
 async function toggleLike(postId, btn) {
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const span = btn.querySelector('span');
   const isLiked = btn.classList.contains('liked');
@@ -177,6 +184,7 @@ async function toggleLike(postId, btn) {
 }
 
 async function toggleBookmark(postId, btn) {
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const span = btn.querySelector('span');
   const isBookmarked = span.textContent === '已收藏';
@@ -192,6 +200,7 @@ async function toggleBookmark(postId, btn) {
 }
 
 async function toggleCommentArea(postId) {
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   const area = document.getElementById(`comments-${postId}`);
   if (area.style.display === 'none') {
     area.style.display = 'block';
@@ -202,6 +211,7 @@ async function toggleCommentArea(postId) {
 }
 
 async function loadComments(postId) {
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   const list = document.getElementById(`comments-list-${postId}`);
   list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
   const { data, error } = await db.from('comments').select('content, created_at, user_id').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
@@ -214,6 +224,7 @@ async function loadComments(postId) {
 }
 
 async function submitComment(postId) {
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const input = document.getElementById(`comment-input-${postId}`);
   const content = input.value.trim();
@@ -238,6 +249,7 @@ async function submitComment(postId) {
 
 // ===== 7. 关注角色 =====
 async function toggleFollow(charHandle, btn) {
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const isFollowing = btn.classList.contains('following');
   if (isFollowing) {
@@ -391,6 +403,7 @@ async function initMessage() {
 }
 
 async function submitMessage(charHandle) {
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const input = $('#message-input');
   const content = input.value.trim();
