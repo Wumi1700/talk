@@ -1,16 +1,20 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-:root {
-  --primary: #5BC0EB;
-  --primary-dark: #3A9BC7;
-  --primary-light: #E3F4FC;
-  --bg: #F0F8FF;
-  --card: #FFFFFF;
-  --text: #1A2B3C;
-  --text-muted: #6B7C8C;
-  --border: #D6E9F5;
-  --radius: 12px;
-  --danger: #E76F51;
+/* ===== 阵营主题色 ===== */
+body.faction-elf {
+  --primary: #5BA87E;
+  --primary-dark: #3E7E5A;
+  --primary-light: #EBF6F0;
+}
+body.faction-dwarf {
+  --primary: #C28A52;
+  --primary-dark: #96663A;
+  --primary-light: #F9F0E5;
+}
+body.faction-human {
+  --primary: #5B8DC9;
+  --primary-dark: #3E6BA0;
+  --primary-light: #EBF2FA;
 }
 
 body {
