@@ -69,6 +69,42 @@ async function checkUser() {
   if (typeof renderSidebar === 'function') await renderSidebar();
 }
 
+function updateUIForLoggedIn() {
+  const actions = document.querySelector('.topbar-actions');
+  if (actions && currentProfile) {
+    actions.innerHTML = `<span style="font-size:14px;font-weight:600;">[${currentProfile.faction}] ${currentProfile.username || '用户'}</span><button class="btn" onclick="handleLogout()">退出</button>`;
+  }
+}
+
+function updateUIForLoggedOut() {
+  const actions = document.querySelector('.topbar-actions');
+  if (actions) {
+    actions.innerHTML = `<button class="btn" onclick="openAuthModal()">登录</button><button class="btn btn-primary" onclick="openAuthModal()">注册</button>`;
+  }
+}
+
+function showBannedScreen() {
+  const main = document.querySelector('main');
+  if (main) {
+    main.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;border-color:#f5c2c7;">
+        <div style="font-size:56px;margin-bottom:16px;">🚪</div>
+        <h3 style="font-size:22px;font-weight:800;margin-bottom:12px;color:#b02a37;">你已被放逐</h3>
+        <p style="font-size:14px;color:var(--muted);line-height:1.9;">
+          你的账号因违反社区规则，已被移出这个世界。<br>
+          你仍可以浏览内容，但无法进行任何互动。
+        </p>
+        <p style="font-size:13px;color:var(--muted);margin-top:20px;">
+          如有异议，请联系管理员。
+        </p>
+        <button class="btn" onclick="handleLogout()" style="margin-top:24px;">退出登录</button>
+      </div>
+    `;
+  }
+  updateUIForLoggedIn();
+  if (typeof renderSidebar === 'function') renderSidebar();
+}
+
 function showBannedScreen() {
   // 保留顶栏、侧边栏、页脚，只在主内容区显示封禁提示
   const main = document.querySelector('main');
