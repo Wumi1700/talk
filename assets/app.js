@@ -1368,8 +1368,13 @@ async function initAdmin() {
 async function adminHideComment(reportId, commentId) {
   const ok = confirm('确定隐藏这条评论吗？隐藏后用户将看不到它。');
   if (!ok) return;
-  await db.from('comments').update({ status: 'hidden' }).eq('id', commentId);
-  await db.from('reports').update({ status: 'handled' }).eq('id', reportId);
+
+  const { error: e1 } = await db.from('comments').update({ status: 'hidden' }).eq('id', commentId);
+  if (e1) return showToast('隐藏评论失败：' + e1.message);
+
+  const { error: e2 } = await db.from('reports').update({ status: 'handled' }).eq('id', reportId);
+  if (e2) return showToast('更新举报状态失败：' + e2.message);
+
   showToast('评论已隐藏');
   await initAdmin();
 }
