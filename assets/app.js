@@ -232,16 +232,57 @@ async function toggleCommentArea(postId) {
 }
 
 async function loadComments(postId) {
-  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   const list = document.getElementById(`comments-list-${postId}`);
   list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
-  const { data, error } = await db.from('comments').select('content, created_at, user_id').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
+  const { data, error } = await db.from('comments').select('id, content, created_at, user_id').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
   if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
+
+  // 查询这些评论的所有点赞
+  const commentIds = data.map(c => c.id);
+  const likeCounts = {};
+  const likedByMe = {};
+  if (commentIds.length) {
+    const { data: allLikes } = await db.from('comment_likes').select('comment_id, user_id').in('comment_id', commentIds);
+    (allLikes || []).forEach(l => {
+      likeCounts[l.comment_id] = (likeCounts[l.comment_id] || 0) + 1;
+      if (currentUser && l.user_id === currentUser.id) likedByMe[l.comment_id] = true;
+    });
+  }
+
   list.innerHTML = data.map(c => {
     const name = (currentUser && c.user_id === currentUser.id) ? (currentProfile?.username || '我') : '读者';
-    return `<div style="font-size:13px; margin-bottom:6px; padding:6px; background:var(--bg); border-radius:6px;"><b>${name}</b>：${c.content}</div>`;
+    const count = likeCounts[c.id] || 0;
+    const liked = !!likedByMe[c.id];
+    return `
+      <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;">
+        <div><b>${name}</b>：${c.content}</div>
+        <div style="margin-top:6px;">
+          <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
+            ♡ <span>${count}</span>
+          </button>
+        </div>
+      </div>
+    `;
   }).join('');
+}
+
+async function toggleCommentLike(commentId, btn) {
+  if (!currentUser) return showToast('请先登录');
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
+  const span = btn.querySelector('span');
+  const isLiked = btn.dataset.liked === 'true';
+  if (isLiked) {
+    await db.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id);
+    btn.dataset.liked = 'false';
+    btn.style.color = 'var(--muted)';
+    span.textContent = Math.max(0, parseInt(span.textContent) - 1);
+  } else {
+    await db.from('comment_likes').insert({ comment_id: commentId, user_id: currentUser.id });
+    btn.dataset.liked = 'true';
+    btn.style.color = '#E76F51';
+    span.textContent = parseInt(span.textContent) + 1;
+  }
 }
 
 async function submitComment(postId) {
