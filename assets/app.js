@@ -83,6 +83,21 @@ function updateUIForLoggedOut() {
   }
 }
 
+function openAuthModal() {
+  const m = document.getElementById('auth-modal');
+  if (m) m.style.display = 'flex';
+}
+
+function closeAuthModal() {
+  const m = document.getElementById('auth-modal');
+  if (m) m.style.display = 'none';
+}
+
+function openFactionModal() {
+  const m = document.getElementById('faction-modal');
+  if (m) m.style.display = 'flex';
+}
+
 function showBannedScreen() {
   // 保留顶栏、侧边栏、页脚，只在主内容区显示封禁提示
   const main = document.querySelector('main');
