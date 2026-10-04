@@ -1,0 +1,7 @@
+{
+  "posts": [
+    { "id": "forum-001", "file": "posts/forum/001.md" },
+    { "id": "forum-002", "file": "posts/forum/002.md" },
+    { "id": "forum-003", "file": "posts/forum/003.md" }
+  ]
+}
