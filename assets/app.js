@@ -776,6 +776,7 @@ async function checkNewReplies() {
 document.addEventListener('DOMContentLoaded', async () => {
   await checkUser();
   await renderSidebar();
+  bindSearchBox();
 });
 
 // ===== 14. 通知中心 =====
@@ -892,4 +893,104 @@ async function initForum() {
       ? (await Promise.all(myPosts.map(renderPostCard))).join('')
       : '<div class="empty">这个阵营还没有帖子</div>'}
   `;
+}
+
+// ===== 16. 顶部搜索框全局绑定 =====
+function bindSearchBox() {
+  const inputs = document.querySelectorAll('.search-box input');
+  inputs.forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const q = input.value.trim();
+        if (!q) return;
+        location.href = 'search.html?q=' + encodeURIComponent(q);
+      }
+    });
+  });
+}
+
+// ===== 17. 搜索页 =====
+function escapeText(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function initSearch() {
+  await checkUser();
+  await loadData();
+
+  const root = $('#search-app');
+  const q = new URLSearchParams(location.search).get('q') || '';
+
+  // 把关键词填回搜索框
+  const searchInput = document.querySelector('.search-box input');
+  if (searchInput && q) searchInput.value = q;
+
+  if (!q) {
+    root.innerHTML = `
+      <div class="card"><h3>搜索</h3></div>
+      <div class="empty">输入关键词，搜索角色、帖子、标签</div>
+    `;
+    return;
+  }
+
+  const lowerQ = q.toLowerCase();
+
+  // 搜角色
+  const matchedChars = Object.values(CHARACTERS).filter(c =>
+    (c.name && c.name.toLowerCase().includes(lowerQ)) ||
+    (c.nameEn && c.nameEn.toLowerCase().includes(lowerQ)) ||
+    (c.handle && c.handle.toLowerCase().includes(lowerQ)) ||
+    (c.bio && c.bio.toLowerCase().includes(lowerQ)) ||
+    (c.location && c.location.toLowerCase().includes(lowerQ))
+  );
+
+  // 搜帖子
+  const matchedPosts = POSTS.filter(p => {
+    const char = CHARACTERS[p.character] || {};
+    return (p.content && p.content.toLowerCase().includes(lowerQ)) ||
+           (p.location && p.location.toLowerCase().includes(lowerQ)) ||
+           (char.name && char.name.toLowerCase().includes(lowerQ)) ||
+           (p.tags && p.tags.some(t => t.toLowerCase().includes(lowerQ)));
+  });
+
+  if (!matchedChars.length && !matchedPosts.length) {
+    root.innerHTML = `
+      <div class="card"><h3>搜索：${escapeText(q)}</h3></div>
+      <div class="empty">没有找到相关内容</div>
+    `;
+    return;
+  }
+
+  let html = `
+    <div class="card">
+      <h3>搜索：${escapeText(q)}</h3>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px;">
+        找到 ${matchedChars.length} 个角色 · ${matchedPosts.length} 篇帖子
+      </div>
+    </div>
+  `;
+
+  if (matchedChars.length) {
+    html += `<div class="card"><h3>角色（${matchedChars.length}）</h3></div>`;
+    html += matchedChars.map(c => `
+      <div class="card" style="display:flex;align-items:center;gap:12px;">
+        ${avatarHTML(c)}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;">
+            <a href="character.html?handle=${c.handle}">${escapeText(c.name)}</a>
+            ${c.verified ? `<span class="verified">✓ ${escapeText(c.verified)}</span>` : ''}
+          </div>
+          <div style="font-size:13px;color:var(--muted);">@${escapeText(c.handle)} · ${escapeText(c.bio || '')}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  if (matchedPosts.length) {
+    html += `<div class="card" style="margin-top:16px;"><h3>帖子（${matchedPosts.length}）</h3></div>`;
+    const postCards = await Promise.all(matchedPosts.map(renderPostCard));
+    html += postCards.join('');
+  }
+
+  root.innerHTML = html;
 }
