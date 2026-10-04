@@ -144,18 +144,23 @@ async function handleRegister() {
   const { data, error } = await db.auth.signUp({ email, password });
   if (error) return showToast('注册失败：' + error.message);
 
-  showToast('你已踏入这个世界，请选择阵营');
   closeAuthModal();
 
-  // 同步当前用户
-  const { data: { user } } = await db.auth.getUser();
-  currentUser = user;
+  // 稍等一下，让 Supabase 建立 session
+  setTimeout(async () => {
+    const { data: { user } } = await db.auth.getUser();
 
-  // 直接弹阵营窗口，不依赖 checkUser
-  setTimeout(() => {
+    if (!user) {
+      // 邮箱确认还开着：用户未登录，无法选阵营
+      showToast('注册成功，请先到邮箱点击确认链接，再回来登录');
+      return;
+    }
+
+    // 已自动登录，弹阵营窗口
+    currentUser = user;
     const m = document.getElementById('faction-modal');
     if (m) m.style.display = 'flex';
-  }, 300);
+  }, 600);
 }
 async function handleLogout() {
   await db.auth.signOut(); currentUser = null; currentProfile = null;
