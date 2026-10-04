@@ -16,7 +16,7 @@
     "bookmarks": [],
     "privacy": {
       "follows": true,
-      "likes": true,
+      "likes": false,
       "bookmarks": true
     }
   }
