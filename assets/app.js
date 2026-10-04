@@ -234,11 +234,11 @@ async function toggleCommentArea(postId) {
 async function loadComments(postId) {
   const list = document.getElementById(`comments-list-${postId}`);
   list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
-  const { data, error } = await db.from('comments').select('id, content, created_at, user_id').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
+  const { data, error } = await db.from('comments').select('id, content, created_at, user_id, parent_id').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
   if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
 
-  // 查询这些评论的所有点赞
+  // 查询点赞
   const commentIds = data.map(c => c.id);
   const likeCounts = {};
   const likedByMe = {};
@@ -250,21 +250,82 @@ async function loadComments(postId) {
     });
   }
 
-  list.innerHTML = data.map(c => {
+  // 组织树形结构：顶级评论 + 回复
+  const roots = data.filter(c => !c.parent_id);
+  const repliesMap = {};
+  data.filter(c => c.parent_id).forEach(c => {
+    if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
+    repliesMap[c.parent_id].push(c);
+  });
+
+  function renderOne(c, isReply) {
     const name = (currentUser && c.user_id === currentUser.id) ? (currentProfile?.username || '我') : '读者';
     const count = likeCounts[c.id] || 0;
     const liked = !!likedByMe[c.id];
     return `
-      <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;">
+      <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
         <div><b>${name}</b>：${c.content}</div>
-        <div style="margin-top:6px;">
+        <div style="margin-top:6px;display:flex;gap:12px;">
           <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
             ♡ <span>${count}</span>
           </button>
+          <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
+        </div>
+        <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
+          <div style="display:flex;gap:6px;">
+            <input id="reply-input-${c.id}" type="text" maxlength="500" placeholder="回复..." style="flex:1;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <button class="btn btn-primary" onclick="submitReply('${postId}', '${c.id}')" style="padding:6px 12px;font-size:13px;">发送</button>
+          </div>
         </div>
       </div>
     `;
-  }).join('');
+  }
+
+  let html = '';
+  roots.forEach(c => {
+    html += renderOne(c, false);
+    (repliesMap[c.id] || []).forEach(r => {
+      html += renderOne(r, true);
+    });
+  });
+  list.innerHTML = html;
+}
+
+function showReplyBox(commentId) {
+  const box = document.getElementById(`reply-box-${commentId}`);
+  if (!box) return;
+  if (box.style.display === 'none' || !box.style.display) {
+    box.style.display = 'block';
+    const input = document.getElementById(`reply-input-${commentId}`);
+    if (input) input.focus();
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+async function submitReply(postId, parentId) {
+  if (!currentUser) return showToast('请先登录');
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
+  const input = document.getElementById(`reply-input-${parentId}`);
+  const content = input.value.trim();
+  if (!content) return showToast('请输入内容');
+  if (await containsSensitiveWord(content)) return showToast('你的内容包含敏感词，请修改后重试');
+  if (content.length > 500) return showToast('回复最多500字');
+
+  const { count: postCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId).eq('user_id', currentUser.id);
+  if (postCount >= 3) return showToast('每帖最多评论3条（含回复）');
+
+  const today = new Date().toISOString().split('T')[0];
+  const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
+  if (dayCount >= 10) return showToast('每天最多评论10条（含回复）');
+
+  const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content, parent_id: parentId });
+  if (error) return showToast('回复失败：' + error.message);
+  showToast('回复成功');
+  input.value = '';
+  await loadComments(postId);
+  const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
+  if (btn) btn.textContent = parseInt(btn.textContent) + 1;
 }
 
 async function toggleCommentLike(commentId, btn) {
