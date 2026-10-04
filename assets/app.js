@@ -70,11 +70,13 @@ async function checkUser() {
 }
 
 function showBannedScreen() {
-  document.body.innerHTML = `
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:20px;">
-      <div style="max-width:480px;text-align:center;background:#fff;border:1px solid var(--border);border-radius:16px;padding:48px 32px;">
-        <div style="font-size:64px;margin-bottom:16px;">🚪</div>
-        <h2 style="font-size:24px;font-weight:800;margin-bottom:12px;color:var(--text);">你已被放逐</h2>
+  // 保留顶栏、侧边栏、页脚，只在主内容区显示封禁提示
+  const main = document.querySelector('main');
+  if (main) {
+    main.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px;border-color:#f5c2c7;">
+        <div style="font-size:56px;margin-bottom:16px;">🚪</div>
+        <h3 style="font-size:22px;font-weight:800;margin-bottom:12px;color:#b02a37;">你已被放逐</h3>
         <p style="font-size:14px;color:var(--muted);line-height:1.9;">
           你的账号因违反社区规则，已被移出这个世界。<br>
           你仍可以浏览内容，但无法进行任何互动。
@@ -82,9 +84,14 @@ function showBannedScreen() {
         <p style="font-size:13px;color:var(--muted);margin-top:20px;">
           如有异议，请联系管理员。
         </p>
+        <button class="btn" onclick="handleLogout()" style="margin-top:24px;">退出登录</button>
       </div>
-    </div>
-  `;
+    `;
+  }
+  // 同时把顶栏的登录状态更新一下（显示昵称 + 退出）
+  updateUIForLoggedIn();
+  // 仍要渲染侧边栏（让用户能浏览其他页面，但不能互动）
+  if (typeof renderSidebar === 'function') renderSidebar();
 }
 
 async function handleRegister() {
