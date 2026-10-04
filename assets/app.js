@@ -245,14 +245,13 @@ async function loadComments(postId) {
 }
 
 async function submitComment(postId) {
-  if (!wordSensor) await initWordSensor();
-if (containsSensitiveWord(content)) {
-  return showToast('你的内容包含敏感词，请修改后重试');
-}
-  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   const input = document.getElementById(`comment-input-${postId}`);
   const content = input.value.trim();
+  if (await containsSensitiveWord(content)) {
+    return showToast('你的内容包含敏感词，请修改后重试');
+  }
   if (!content) return showToast('请输入评论内容');
   if (content.length > 500) return showToast('评论最多500字');
 
@@ -429,14 +428,13 @@ async function initMessage() {
 }
 
 async function submitMessage(charHandle) {
-  if (!wordSensor) await initWordSensor();
-if (containsSensitiveWord(content)) {
-  return showToast('你的内容包含敏感词，请修改后重试');
-}
-  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   const input = $('#message-input');
   const content = input.value.trim();
+  if (await containsSensitiveWord(content)) {
+    return showToast('你的内容包含敏感词，请修改后重试');
+  }
   if (!content) return showToast('请输入内容');
   if (content.length > 1000) return showToast('私信最多1000字');
 
@@ -1047,37 +1045,37 @@ async function initSearch() {
 }
 
 // ===== 18. 敏感词过滤 =====
-let wordSensor = null;
+let sensitiveWords = [];
+let sensitiveLoaded = false;
 
-async function initWordSensor() {
-  try {
-    const files = ['广告.txt', '政治类.txt', '色情类.txt', '涉枪涉爆违法信息关键词.txt'];
-    const words = [];
-
-    for (const file of files) {
-      const res = await fetch('words/' + file);
+async function loadSensitiveWords() {
+  if (sensitiveLoaded) return;
+  const files = ['广告.txt', '政治类.txt', '色情类.txt', '涉枪涉爆违法信息关键词.txt'];
+  const words = [];
+  for (const file of files) {
+    try {
+      const res = await fetch('words/' + encodeURIComponent(file));
+      if (!res.ok) { console.warn('词库加载失败：' + file); continue; }
       const text = await res.text();
-      // 处理逗号分隔和换行分隔两种格式
       text.split(/[,\n]/).forEach(w => {
-        const trimmed = w.trim();
-        if (trimmed) words.push(trimmed);
+        const t = w.trim();
+        if (t && t.length >= 2) words.push(t);
       });
+    } catch (e) {
+      console.warn('词库文件读取失败：' + file, e);
     }
-
-    wordSensor = new WordSensor({
-      words: words,
-      maskChar: '*',
-      caseInsensitive: true
-    });
-    console.log('敏感词库加载完成，共 ' + words.length + ' 条');
-  } catch (e) {
-    console.error('敏感词库加载失败：', e);
   }
+  sensitiveWords = words;
+  sensitiveLoaded = true;
+  console.log('敏感词库加载完成，共 ' + words.length + ' 条');
 }
 
-function containsSensitiveWord(text) {
-  if (!wordSensor) return false;
-  // detect 方法返回检测到的敏感词数组
-  const detected = wordSensor.detect(text);
-  return detected && detected.length > 0;
+async function containsSensitiveWord(text) {
+  await loadSensitiveWords();
+  if (!sensitiveWords.length) return false;
+  const lower = text.toLowerCase();
+  for (const w of sensitiveWords) {
+    if (lower.includes(w.toLowerCase())) return true;
+  }
+  return false;
 }
