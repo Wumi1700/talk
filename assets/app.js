@@ -272,7 +272,7 @@ async function renderPostCard(post) {
       ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)">♡ <span>${likeCount || 0}</span></button>
+        <button class="action ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)"><span class="heart-icon">♡</span> <span>${likeCount || 0}</span></button>
         <button class="action" onclick="toggleCommentArea('${post.id}')">💬 <span>${commentCount || 0}</span></button>
         <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark('${post.id}', this)">🔖 <span>${isBookmarked ? '已收藏' : '收藏'}</span></button>
       </div>
@@ -290,8 +290,8 @@ async function renderPostCard(post) {
 
 // ===== 6. 互动功能 =====
 async function toggleLike(postId, btn) {
-  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   const span = btn.querySelector('span');
   const isLiked = btn.classList.contains('liked');
   if (isLiked) {
@@ -301,6 +301,10 @@ async function toggleLike(postId, btn) {
   } else {
     await db.from('likes').insert({ post_id: postId, user_id: currentUser.id });
     btn.classList.add('liked');
+    // 播放弹跳动画：先移除再添加，保证每次都能触发
+    btn.style.animation = 'none';
+    void btn.offsetWidth;
+    btn.style.animation = 'heart-pop 0.4s ease-in-out';
     span.textContent = parseInt(span.textContent) + 1;
   }
 }
@@ -444,6 +448,9 @@ async function toggleCommentLike(commentId, btn) {
     await db.from('comment_likes').insert({ comment_id: commentId, user_id: currentUser.id });
     btn.dataset.liked = 'true';
     btn.style.color = '#E76F51';
+    btn.classList.remove('pop');
+    void btn.offsetWidth;
+    btn.classList.add('pop');
     span.textContent = parseInt(span.textContent) + 1;
   }
 }
