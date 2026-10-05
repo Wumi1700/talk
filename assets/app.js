@@ -65,7 +65,7 @@ function parseFrontMatter(text) {
 }
 function renderMarkdown(md) {
   let html = md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" onclick="openImageViewer(\'' + '$2' + '\')">');
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
@@ -220,6 +220,28 @@ async function loadData() {
   POSTS.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
 }
 
+function renderPostImages(images) {
+  if (!images || !images.length) return '';
+  const count = Math.min(images.length, 4);
+  const cls = 'post-images post-images-' + count;
+  return `<div class="${cls}">${images.slice(0, 4).map(img =>
+    `<img src="${img}" alt="" loading="lazy" onclick="openImageViewer('${img}')">`
+  ).join('')}</div>`;
+}
+
+function openImageViewer(src) {
+  const existing = document.getElementById('image-viewer');
+  if (existing) existing.remove();
+  const viewer = document.createElement('div');
+  viewer.id = 'image-viewer';
+  viewer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:20px;';
+  viewer.innerHTML = `<img src="${src}" style="max-width:90%;max-height:90%;border-radius:8px;">`;
+  viewer.addEventListener('click', () => viewer.remove());
+  const onEsc = (e) => { if (e.key === 'Escape') { viewer.remove(); document.removeEventListener('keydown', onEsc); } };
+  document.addEventListener('keydown', onEsc);
+  document.body.appendChild(viewer);
+}
+
 async function renderPostCard(post) {
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
   const tags = (post.tags || []).map(t => `<a class="tag" href="#">#${t}</a>`).join('');
@@ -247,6 +269,7 @@ async function renderPostCard(post) {
         </div>
       </div>
       <div class="post-body">${renderMarkdown(post.content)}</div>
+      ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
         <button class="action ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)">♡ <span>${likeCount || 0}</span></button>
