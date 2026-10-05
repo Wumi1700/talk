@@ -341,3 +341,48 @@ a:hover { text-decoration: underline; }
 #image-viewer img {
   box-shadow: 0 0 40px rgba(0,0,0,0.5);
 }
+
+/* ===== 交互动画 ===== */
+
+/* 按钮按下去缩一下 */
+.btn, .action, .profile-tabs button {
+  transition: transform 0.1s, background 0.15s, color 0.15s;
+}
+.btn:active, .action:active {
+  transform: scale(0.96);
+}
+
+/* 点赞心形弹一下 */
+@keyframes heart-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.4); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.action.liked { color: var(--danger); }
+.action.liked .heart-icon { animation: heart-pop 0.4s ease-in-out; }
+
+/* 评论点赞也用同一动画 */
+.comment-like-btn.pop { animation: heart-pop 0.4s ease-in-out; }
+
+/* Toast 从顶部滑下来 */
+.toast {
+  position: fixed;
+  top: 20px;
+  bottom: auto;
+  left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  background: var(--text);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-size: 14px;
+  opacity: 0;
+  transition: transform 0.25s ease-out, opacity 0.25s;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
