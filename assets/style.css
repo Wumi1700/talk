@@ -279,3 +279,65 @@ a:hover { text-decoration: underline; }
   transition: all 0.3s; z-index: 999;
 }
 .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ===== 图片展示 ===== */
+.post-images {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 100%;
+}
+.post-images img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  display: block;
+  transition: opacity 0.15s;
+}
+.post-images img:hover { opacity: 0.92; }
+
+/* 单图：全宽，最高 500px */
+.post-images-1 { grid-template-columns: 1fr; }
+.post-images-1 img { max-height: 500px; }
+
+/* 2 图：左右并排 */
+.post-images-2 {
+  grid-template-columns: 1fr 1fr;
+  aspect-ratio: 2 / 1.2;
+}
+
+/* 3 图：左 1 大，右 2 小 */
+.post-images-3 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  aspect-ratio: 16 / 10;
+}
+.post-images-3 img:first-child { grid-row: 1 / 3; grid-column: 1 / 2; }
+.post-images-3 img:nth-child(2) { grid-column: 2 / 3; grid-row: 1 / 2; }
+.post-images-3 img:nth-child(3) { grid-column: 2 / 3; grid-row: 2 / 3; }
+
+/* 4 图：2×2 */
+.post-images-4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  aspect-ratio: 1 / 1;
+}
+
+/* 正文内嵌图片（Markdown 语法 ![alt](url)） */
+.post-body img {
+  max-width: 100%;
+  max-height: 500px;
+  border-radius: 12px;
+  margin: 8px 0;
+  cursor: pointer;
+  display: block;
+  object-fit: cover;
+}
+
+/* 图片查看器（全屏） */
+#image-viewer img {
+  box-shadow: 0 0 40px rgba(0,0,0,0.5);
+}
