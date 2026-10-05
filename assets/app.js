@@ -272,7 +272,7 @@ async function renderPostCard(post) {
       ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)"><span class="heart-icon">♡</span> <span>${likeCount || 0}</span></button>
+        <button class="action ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount || 0}</span></button>
         <button class="action" onclick="toggleCommentArea('${post.id}')">💬 <span>${commentCount || 0}</span></button>
         <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark('${post.id}', this)">🔖 <span>${isBookmarked ? '已收藏' : '收藏'}</span></button>
       </div>
@@ -292,20 +292,22 @@ async function renderPostCard(post) {
 async function toggleLike(postId, btn) {
   if (!currentUser) return showToast('请先登录');
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
-  const span = btn.querySelector('span');
+  const countSpan = btn.querySelector('.like-count');
+  const heartSpan = btn.querySelector('.heart-icon');
   const isLiked = btn.classList.contains('liked');
   if (isLiked) {
     await db.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
     btn.classList.remove('liked');
-    span.textContent = Math.max(0, parseInt(span.textContent) - 1);
+    countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
+    if (heartSpan) heartSpan.textContent = '♡';
   } else {
     await db.from('likes').insert({ post_id: postId, user_id: currentUser.id });
     btn.classList.add('liked');
-    // 播放弹跳动画：先移除再添加，保证每次都能触发
     btn.style.animation = 'none';
     void btn.offsetWidth;
     btn.style.animation = 'heart-pop 0.4s ease-in-out';
-    span.textContent = parseInt(span.textContent) + 1;
+    countSpan.textContent = parseInt(countSpan.textContent) + 1;
+    if (heartSpan) heartSpan.textContent = '♥';
   }
 }
 
@@ -371,9 +373,9 @@ async function loadComments(postId) {
       <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
         <div><b>${name}</b>：${c.content}</div>
         <div style="margin-top:6px;display:flex;gap:12px;">
-          <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
-            ♡ <span>${count}</span>
-          </button>
+         <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
+           <span class="heart-icon">${liked ? '♥' : '♡'}</span> <span class="like-count">${count}</span>
+         </button>
           <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
           <button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>
         </div>
@@ -437,13 +439,15 @@ async function submitReply(postId, parentId) {
 async function toggleCommentLike(commentId, btn) {
   if (!currentUser) return showToast('请先登录');
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
-  const span = btn.querySelector('span');
+  const countSpan = btn.querySelector('.like-count');
+  const heartSpan = btn.querySelector('.heart-icon');
   const isLiked = btn.dataset.liked === 'true';
   if (isLiked) {
     await db.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id);
     btn.dataset.liked = 'false';
     btn.style.color = 'var(--muted)';
-    span.textContent = Math.max(0, parseInt(span.textContent) - 1);
+    countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
+    if (heartSpan) heartSpan.textContent = '♡';
   } else {
     await db.from('comment_likes').insert({ comment_id: commentId, user_id: currentUser.id });
     btn.dataset.liked = 'true';
@@ -451,7 +455,8 @@ async function toggleCommentLike(commentId, btn) {
     btn.classList.remove('pop');
     void btn.offsetWidth;
     btn.classList.add('pop');
-    span.textContent = parseInt(span.textContent) + 1;
+    countSpan.textContent = parseInt(countSpan.textContent) + 1;
+    if (heartSpan) heartSpan.textContent = '♥';
   }
 }
 
