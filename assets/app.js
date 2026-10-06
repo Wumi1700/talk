@@ -40,6 +40,81 @@ function relativeTime(dateStr) {
   if (diff < 86400 * 365) return Math.floor(diff / 86400 / 30) + ' 个月前';
   return Math.floor(diff / 86400 / 365) + ' 年前';
 }
+// ===== 用户头像 HTML =====
+function userAvatarHTML(profile, size = 28) {
+  const ch = (profile && profile.username) ? profile.username.slice(0, 1) : '?';
+  const url = profile && profile.avatar_url;
+  const style = `width:${size}px;height:${size}px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden;flex-shrink:0;font-size:${Math.round(size*0.45)}px;`;
+  if (url) {
+    return `<div style="${style}"><img src="${url}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentNode.textContent='${ch}'"></div>`;
+  }
+  return `<div style="${style}">${ch}</div>`;
+}
+
+// ===== 图片压缩 =====
+function compressImage(file, maxW, maxH, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const ratio = Math.min(maxW / width, maxH / height, 1);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('压缩失败')), 'image/webp', quality);
+    };
+    img.onerror = () => reject(new Error('图片读取失败'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ===== 上传图片到 Storage =====
+async function uploadToStorage(blob, bucket, field) {
+  const path = `${currentUser.id}/${Date.now()}.webp`;
+  const { error } = await db.storage.from(bucket).upload(path, blob, { upsert: true, contentType: 'image/webp' });
+  if (error) throw error;
+  const { data: { publicUrl } } = db.storage.from(bucket).getPublicUrl(path);
+
+  const { error: e2 } = await db.from('profiles').update({ [field]: publicUrl }).eq('id', currentUser.id);
+  if (e2) throw e2;
+
+  currentProfile[field] = publicUrl;
+  return publicUrl;
+}
+
+// ===== 选择并上传头像/背景 =====
+async function pickAndUpload(bucket, maxW, maxH, maxKB, field) {
+  if (!currentUser) return showToast('请先登录');
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return showToast('原图太大（超过 10MB），请换一张');
+
+    showToast('正在处理图片...');
+    try {
+      let blob = await compressImage(file, maxW, maxH, 0.8);
+      if (blob.size > maxKB * 1024) blob = await compressImage(file, maxW, maxH, 0.6);
+      if (blob.size > maxKB * 1024) blob = await compressImage(file, maxW, maxH, 0.4);
+      if (blob.size > maxKB * 1024) return showToast('压缩后仍超过 ' + maxKB + 'KB，请换一张');
+
+      await uploadToStorage(blob, bucket, field);
+      showToast('已更新');
+      updateUIForLoggedIn();
+      if (document.getElementById('settings-app')) initSettings();
+      if (document.getElementById('user-profile')) initProfile();
+    } catch (e) {
+      showToast('上传失败：' + (e.message || '未知错误'));
+    }
+  };
+  input.click();
+}
 function showToast(msg) {
   let t = $('#toast');
   if (!t) { t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
@@ -104,7 +179,14 @@ async function checkUser() {
 function updateUIForLoggedIn() {
   const actions = document.querySelector('.topbar-actions');
   if (actions && currentProfile) {
-    actions.innerHTML = `<span style="font-size:14px;font-weight:600;">${factionIcon(currentProfile.faction)}[${currentProfile.faction}] ${currentProfile.username || '用户'}</span><button class="btn" onclick="handleLogout()">退出</button>`;
+    actions.style.display = 'flex';
+    actions.style.alignItems = 'center';
+    actions.style.gap = '10px';
+    actions.innerHTML = `
+      ${userAvatarHTML(currentProfile, 28)}
+      <span style="font-size:14px;font-weight:600;">${factionIcon(currentProfile.faction)} ${currentProfile.username || '用户'}</span>
+      <button class="btn" onclick="handleLogout()">退出</button>
+    `;
   }
 }
 
@@ -678,7 +760,6 @@ async function submitMessage(charHandle) {
 // ===== 10. 用户个人主页 =====
 async function initProfile() {
   await checkUser();
-  if (currentProfile && currentProfile.is_banned) return;
   await loadData();
   const root = $('#user-profile');
   if (!currentUser || !currentProfile) {
@@ -689,24 +770,99 @@ async function initProfile() {
   const username = currentProfile.username || '新用户';
   const faction = currentProfile.faction || '人类';
   const createdAt = new Date(currentUser.created_at).toLocaleDateString('zh-CN');
+  const bannerStyle = currentProfile.banner_url
+    ? `background:url('${currentProfile.banner_url}') center/cover no-repeat;`
+    : `background:linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);`;
 
   root.innerHTML = `
-    <div class="card" style="text-align:center;padding:24px;">
-      <div class="avatar large" style="margin:0 auto 12px;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;">${username.slice(0,1)}</div>
-      <div style="font-size:22px;font-weight:800;margin-bottom:6px;">${username}</div>
-      <div style="font-size:14px;color:var(--muted);margin-bottom:8px;">
-        <span class="verified">[${faction}]</span> · 注册于 ${createdAt}
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="height:140px;${bannerStyle}"></div>
+      <div style="padding:0 20px 20px;">
+        <div style="margin-top:-40px;display:flex;align-items:flex-end;gap:16px;">
+          <div style="border:4px solid #fff;border-radius:50%;background:#fff;">${userAvatarHTML(currentProfile, 88)}</div>
+          <div style="padding-bottom:8px;">
+            <div style="font-size:20px;font-weight:800;">${username}</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px;">
+              ${factionIcon(faction)} [${faction}] · 注册于 ${createdAt}
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:16px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;">
+          ${currentProfile.bio ? currentProfile.bio.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '<span style="color:var(--muted);">还没有填写简介</span>'}
+        </div>
+        <div style="margin-top:16px;">
+          <a href="settings.html" class="btn" style="font-size:13px;">编辑资料</a>
+        </div>
       </div>
-      <div style="font-size:13px;color:var(--muted);">TALK 旅者编号：${currentUser.id.slice(0,8)}</div>
     </div>
     <div class="profile-tabs" id="profile-tabs">
-      <button class="active" data-tab="likes">我的点赞</button>
+      <button class="active" data-tab="follows">我的关注</button>
+      <button data-tab="likes">我的点赞</button>
       <button data-tab="bookmarks">我的收藏</button>
       <button data-tab="comments">我的评论</button>
-      <button data-tab="follows">我的关注</button>
     </div>
     <div id="user-tab-content"></div>
   `;
+
+  // 复用原来的标签页逻辑
+  const renderUserTab = async (tab) => {
+    const container = $('#user-tab-content');
+    container.innerHTML = '<div class="empty">加载中...</div>';
+
+    if (tab === 'follows') {
+      const { data: followData } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
+      const ids = (followData || []).map(f => f.character_id);
+      const followedChars = ids.map(id => CHARACTERS[id]).filter(Boolean);
+      if (!followedChars.length) return container.innerHTML = '<div class="empty">你还没有关注任何角色</div>';
+      container.innerHTML = followedChars.map(c => `
+        <div class="card" style="display:flex;align-items:center;gap:12px;">
+          ${avatarHTML(c)}
+          <div style="flex:1;">
+            <div style="font-weight:600;"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
+            <div style="font-size:13px;color:var(--muted);">@${c.handle} · ${c.bio || ''}</div>
+          </div>
+          <button class="btn btn-primary" onclick="unfollowFromProfile('${c.handle}', this)">已关注</button>
+        </div>
+      `).join('');
+    } else if (tab === 'likes') {
+      const { data: likesData } = await db.from('likes').select('post_id').eq('user_id', currentUser.id);
+      const ids = (likesData || []).map(l => l.post_id);
+      const likedPosts = POSTS.filter(p => ids.includes(p.id));
+      if (!likedPosts.length) return container.innerHTML = '<div class="empty">你还没有点赞过帖子</div>';
+      const html = await Promise.all(likedPosts.map(renderPostCard));
+      container.innerHTML = html.join('');
+    } else if (tab === 'bookmarks') {
+      const { data: bkData } = await db.from('bookmarks').select('post_id').eq('user_id', currentUser.id);
+      const ids = (bkData || []).map(b => b.post_id);
+      const bkPosts = POSTS.filter(p => ids.includes(p.id));
+      if (!bkPosts.length) return container.innerHTML = '<div class="empty">你还没有收藏过帖子</div>';
+      const html = await Promise.all(bkPosts.map(renderPostCard));
+      container.innerHTML = html.join('');
+    } else if (tab === 'comments') {
+      const { data: cmData } = await db.from('comments').select('content, post_id, created_at').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+      if (!cmData || !cmData.length) return container.innerHTML = '<div class="empty">你还没有发过评论</div>';
+      container.innerHTML = cmData.map(c => {
+        const post = POSTS.find(p => p.id === c.post_id);
+        const postTitle = post ? post.content.slice(0, 30) + '...' : '（帖子已删除）';
+        return `<div class="card" style="margin-bottom:10px;">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">评论了帖子：${postTitle}</div>
+          <div style="font-size:14px;background:var(--bg);padding:8px;border-radius:8px;">${c.content}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;">${new Date(c.created_at).toLocaleString('zh-CN')}</div>
+        </div>`;
+      }).join('');
+    }
+  };
+
+  renderUserTab('follows');
+
+  $$('#profile-tabs button').forEach(b => {
+    b.addEventListener('click', async () => {
+      $$('#profile-tabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      await renderUserTab(b.dataset.tab);
+    });
+  });
+}
 
   const renderUserTab = async (tab) => {
     const container = $('#user-tab-content');
@@ -895,25 +1051,34 @@ async function unfollowFromProfile(handle, btn) {
 // ===== 12. 设置页 =====
 async function initSettings() {
   await checkUser();
-  if (currentProfile && currentProfile.is_banned) return;
   const root = $('#settings-app');
   if (!currentUser || !currentProfile) {
     root.innerHTML = '<div class="empty">请先登录后再查看设置</div>';
     return;
   }
 
+  const banner = currentProfile.banner_url
+    ? `<div style="height:160px;border-radius:12px;background:url('${currentProfile.banner_url}') center/cover no-repeat;"></div>`
+    : `<div style="height:160px;border-radius:12px;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-light) 100%);"></div>`;
+
   root.innerHTML = `
     <div class="card">
-      <h3>账号信息</h3>
-      <div style="font-size:14px;color:var(--muted);line-height:2;">
-        <div>邮箱：${currentUser.email}</div>
-        <div>阵营：${currentProfile.faction}（选定后 3 个月内不可更改）</div>
-        <div>注册时间：${new Date(currentUser.created_at).toLocaleString('zh-CN')}</div>
+      <h3>个人资料</h3>
+      <div style="position:relative;margin-bottom:12px;">
+        ${banner}
+        <button class="btn" onclick="pickAndUpload('banners', 1200, 400, 300, 'banner_url')" style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;">更换背景</button>
       </div>
+      <div style="display:flex;align-items:center;gap:16px;margin-top:-48px;padding-left:20px;position:relative;z-index:2;">
+        <div style="position:relative;">
+          <div style="border:4px solid #fff;border-radius:50%;display:inline-block;">${userAvatarHTML(currentProfile, 84)}</div>
+        </div>
+        <button class="btn" onclick="pickAndUpload('avatars', 400, 400, 100, 'avatar_url')" style="margin-top:44px;">更换头像</button>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:16px;">头像建议 400×400，背景建议 1200×400，会压缩成 WebP。</p>
     </div>
 
     <div class="card">
-      <h3>修改昵称</h3>
+      <h3>昵称</h3>
       <div style="display:flex;gap:8px;">
         <input id="new-username" type="text" value="${currentProfile.username || ''}" placeholder="输入新昵称" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
         <button class="btn btn-primary" onclick="updateUsername()">保存</button>
@@ -921,11 +1086,30 @@ async function initSettings() {
     </div>
 
     <div class="card">
+      <h3>简介</h3>
+      <textarea id="new-bio" maxlength="200" placeholder="一句话介绍自己（最多 200 字）" style="width:100%;min-height:80px;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;">${currentProfile.bio || ''}</textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span style="font-size:12px;color:var(--muted);"><span id="bio-count">${(currentProfile.bio || '').length}</span> / 200</span>
+        <button class="btn btn-primary" onclick="updateBio()">保存简介</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>修改密码</h3>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        <input id="new-password" type="password" placeholder="输入新密码（至少6位）" style="padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <input id="old-password" type="password" placeholder="当前密码" style="padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <input id="new-password" type="password" placeholder="新密码（至少6位）" style="padding:10px;border:1px solid var(--border);border-radius:8px;">
         <input id="new-password2" type="password" placeholder="再次输入新密码" style="padding:10px;border:1px solid var(--border);border-radius:8px;">
         <button class="btn btn-primary" onclick="updatePassword()" style="align-self:flex-start;">修改密码</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>账号信息</h3>
+      <div style="font-size:14px;color:var(--muted);line-height:2;">
+        <div>邮箱：${currentUser.email}</div>
+        <div>阵营：${currentProfile.faction}</div>
+        <div>注册时间：${new Date(currentUser.created_at).toLocaleString('zh-CN')}</div>
       </div>
     </div>
 
@@ -940,6 +1124,14 @@ async function initSettings() {
       <button class="btn" onclick="deleteAccount()" style="border-color:#dc3545;color:#dc3545;">删除我的账号</button>
     </div>
   `;
+
+  // 简介字数实时更新
+  const bioEl = document.getElementById('new-bio');
+  if (bioEl) {
+    bioEl.addEventListener('input', () => {
+      document.getElementById('bio-count').textContent = bioEl.value.length;
+    });
+  }
 }
 
 async function updateUsername() {
@@ -953,16 +1145,38 @@ async function updateUsername() {
   updateUIForLoggedIn();
 }
 
+async function updateBio() {
+  const bio = document.getElementById('new-bio').value.trim();
+  if (await containsSensitiveWord(bio)) return showToast('简介包含敏感词，请修改后重试');
+  if (bio.length > 200) return showToast('简介最多 200 字');
+  const { error } = await db.from('profiles').update({ bio: bio }).eq('id', currentUser.id);
+  if (error) return showToast('保存失败：' + error.message);
+  currentProfile.bio = bio;
+  showToast('简介已保存');
+}
+
 async function updatePassword() {
-  const p1 = $('#new-password').value;
-  const p2 = $('#new-password2').value;
-  if (!p1 || p1.length < 6) return showToast('密码至少6位');
-  if (p1 !== p2) return showToast('两次输入的密码不一致');
+  const oldPwd = document.getElementById('old-password').value;
+  const p1 = document.getElementById('new-password').value;
+  const p2 = document.getElementById('new-password2').value;
+  if (!oldPwd) return showToast('请输入当前密码');
+  if (!p1 || p1.length < 6) return showToast('新密码至少6位');
+  if (p1 !== p2) return showToast('两次输入的新密码不一致');
+  if (p1 === oldPwd) return showToast('新密码不能与旧密码相同');
+
+  // 用旧密码验证一次
+  const { error: verifyErr } = await db.auth.signInWithPassword({
+    email: currentUser.email,
+    password: oldPwd
+  });
+  if (verifyErr) return showToast('当前密码不正确');
+
   const { error } = await db.auth.updateUser({ password: p1 });
   if (error) return showToast('修改失败：' + error.message);
-  showToast('新口令已生效');
-  $('#new-password').value = '';
-  $('#new-password2').value = '';
+  showToast('密码已修改');
+  document.getElementById('old-password').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('new-password2').value = '';
 }
 
 async function deleteAccount() {
