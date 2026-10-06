@@ -46,7 +46,7 @@ function userAvatarHTML(profile, size = 28) {
   const url = profile && profile.avatar_url;
   const style = `width:${size}px;height:${size}px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden;flex-shrink:0;font-size:${Math.round(size*0.45)}px;`;
   if (url) {
-    return `<div style="${style}"><img src="${url}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentNode.textContent='${ch}'"></div>`;
+    return `<div style="${style};cursor:zoom-in;" onclick="openImageViewer('${url}')"><img src="${url}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentNode.textContent='${ch}'"></div>`;
   }
   return `<div style="${style}">${ch}</div>`;
 }
@@ -87,33 +87,104 @@ async function uploadToStorage(blob, bucket, field) {
 }
 
 // ===== 选择并上传头像/背景 =====
-async function pickAndUpload(bucket, maxW, maxH, maxKB, field) {
+async function pickAndUpload(bucket, maxW, maxH, maxKB, field, aspectRatio = 1) {
   if (!currentUser) return showToast('请先登录');
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/jpeg,image/png,image/webp';
-  input.onchange = async () => {
+  input.onchange = () => {
     const file = input.files[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) return showToast('原图太大（超过 10MB），请换一张');
-
-    showToast('正在处理图片...');
-    try {
-      let blob = await compressImage(file, maxW, maxH, 0.8);
-      if (blob.size > maxKB * 1024) blob = await compressImage(file, maxW, maxH, 0.6);
-      if (blob.size > maxKB * 1024) blob = await compressImage(file, maxW, maxH, 0.4);
-      if (blob.size > maxKB * 1024) return showToast('压缩后仍超过 ' + maxKB + 'KB，请换一张');
-
-      await uploadToStorage(blob, bucket, field);
-      showToast('已更新');
-      updateUIForLoggedIn();
-      if (document.getElementById('settings-app')) initSettings();
-      if (document.getElementById('user-profile')) initProfile();
-    } catch (e) {
-      showToast('上传失败：' + (e.message || '未知错误'));
-    }
+    openCropperDialog(file, bucket, maxW, maxH, maxKB, field, aspectRatio);
   };
   input.click();
+}
+
+function openCropperDialog(file, bucket, maxW, maxH, maxKB, field, aspectRatio) {
+  if (typeof Cropper === 'undefined') {
+    showToast('裁剪库未加载，请刷新重试');
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const dialog = document.createElement('div');
+  dialog.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+  dialog.innerHTML = `
+    <div style="width:100%;max-width:600px;background:#fff;border-radius:12px;padding:16px;box-sizing:border-box;">
+      <h3 style="margin-bottom:12px;font-size:16px;">调整图片（拖动和缩放）</h3>
+      <div style="max-height:60vh;overflow:hidden;background:#f0f0f0;border-radius:8px;">
+        <img id="cropper-img" src="${url}" style="max-width:100%;display:block;">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+        <button class="btn" id="crop-cancel">取消</button>
+        <button class="btn btn-primary" id="crop-confirm">确认上传</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+
+  const imgEl = dialog.querySelector('#cropper-img');
+  let cropper = null;
+
+  const cleanup = () => {
+    if (cropper) { try { cropper.destroy(); } catch(e){} cropper = null; }
+    URL.revokeObjectURL(url);
+    dialog.remove();
+  };
+
+  imgEl.onload = () => {
+    cropper = new Cropper(imgEl, {
+      aspectRatio: aspectRatio,
+      viewMode: 1,
+      dragMode: 'move',
+      autoCropArea: 0.85,
+      background: false,
+      responsive: true,
+      guides: true,
+      center: true,
+      highlight: false,
+      cropBoxMovable: true,
+      cropBoxResizable: true,
+      toggleDragModeOnDblclick: false,
+    });
+  };
+
+  dialog.querySelector('#crop-cancel').onclick = cleanup;
+
+  dialog.querySelector('#crop-confirm').onclick = () => {
+    if (!cropper) return showToast('图片加载中，请稍候');
+    const canvas = cropper.getCroppedCanvas({
+      width: maxW,
+      height: maxH,
+      imageSmoothingQuality: 'high'
+    });
+    if (!canvas) return showToast('裁剪失败');
+
+    // 质量从 0.9 开始，压到目标大小
+    let quality = 0.9;
+    const tryBlob = (q) => new Promise(r => canvas.toBlob(r, 'image/webp', q));
+
+    (async () => {
+      let blob = await tryBlob(quality);
+      while (blob && blob.size > maxKB * 1024 && quality > 0.4) {
+        quality -= 0.1;
+        blob = await tryBlob(quality);
+      }
+      if (!blob) return showToast('图片处理失败');
+      if (blob.size > maxKB * 1024) return showToast('图片仍超过 ' + maxKB + 'KB，请重试');
+
+      try {
+        await uploadToStorage(blob, bucket, field);
+        showToast('已更新');
+        updateUIForLoggedIn();
+        if (document.getElementById('settings-app')) initSettings();
+        if (document.getElementById('user-profile')) initProfile();
+      } catch (e) {
+        showToast('上传失败：' + (e.message || '未知错误'));
+      }
+      cleanup();
+    })();
+  };
 }
 function showToast(msg) {
   let t = $('#toast');
@@ -149,8 +220,10 @@ function renderMarkdown(md) {
 function avatarHTML(char, size = '') {
   const cls = 'avatar' + (size ? ' ' + size : '');
   const ch = (char && char.name) ? char.name.slice(0, 1) : '?';
-  const img = char && char.avatar ? `<img src="${char.avatar}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${ch}'">` : ch;
-  return `<div class="${cls}">${img}</div>`;
+  if (char && char.avatar) {
+    return `<div class="${cls}" style="cursor:zoom-in;" onclick="openImageViewer('${char.avatar}')"><img src="${char.avatar}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${ch}'"></div>`;
+  }
+  return `<div class="${cls}">${ch}</div>`;
 }
 
 // ===== 4. 认证相关 =====
@@ -1005,13 +1078,13 @@ async function initSettings() {
       <h3>个人资料</h3>
       <div style="position:relative;margin-bottom:12px;">
         ${banner}
-        <button class="btn" onclick="pickAndUpload('banners', 1200, 400, 300, 'banner_url')" style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;">更换背景</button>
+        <button class="btn" onclick="pickAndUpload('banners', 1200, 400, 300, 'banner_url', 3)" style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;">更换背景</button>
       </div>
       <div style="display:flex;align-items:center;gap:16px;margin-top:-48px;padding-left:20px;position:relative;z-index:2;">
         <div style="position:relative;">
           <div style="border:4px solid #fff;border-radius:50%;display:inline-block;">${userAvatarHTML(currentProfile, 84)}</div>
         </div>
-        <button class="btn" onclick="pickAndUpload('avatars', 400, 400, 100, 'avatar_url')" style="margin-top:44px;">更换头像</button>
+        <button class="btn" onclick="" style="margin-top:44px;">更换头像</button>
       </div>
       <p style="font-size:12px;color:var(--muted);margin-top:16px;">头像建议 400×400，背景建议 1200×400，会压缩成 WebP。</p>
     </div>
