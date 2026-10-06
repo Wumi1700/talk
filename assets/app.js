@@ -1078,7 +1078,7 @@ async function initSettings() {
       <h3>个人资料</h3>
       <div style="position:relative;margin-bottom:12px;">
         ${banner}
-        <button class="btn" onclick="pickAndUpload('banners', 1200, 400, 300, 'banner_url', 3)" style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;">更换背景</button>
+        <button class="btn" onclick="pickAndUpload('banners', 1200, 400, 300, 'banner_url', 3)" style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;border:none;z-index:3;">更换背景</button>
       </div>
       <div style="display:flex;align-items:center;gap:16px;margin-top:-48px;padding-left:20px;position:relative;z-index:2;">
         <div style="position:relative;">
