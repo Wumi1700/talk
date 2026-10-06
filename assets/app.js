@@ -10,6 +10,13 @@ let currentProfile = null;
 // ===== 3. 工具函数 =====
 function $(sel, root = document) { return root.querySelector(sel); }
 function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
+//======阵营称号========
+function factionTitle(faction) {
+  if (faction === '精灵') return '旅人';
+  if (faction === '矮人') return '锻造学徒';
+  if (faction === '人类') return '见习法师';
+  return '';
+}
 // ===== 阵营图标 =====
 function factionIcon(faction) {
   if (faction === '精灵') return '🦌';
@@ -842,32 +849,73 @@ async function initProfile() {
 
   const username = currentProfile.username || '新用户';
   const faction = currentProfile.faction || '人类';
+  const title = factionTitle(faction);
   const createdAt = new Date(currentUser.created_at).toLocaleDateString('zh-CN');
   const bannerStyle = currentProfile.banner_url
     ? `background:url('${currentProfile.banner_url}') center/cover no-repeat;`
     : `background:linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);`;
 
+  // 统计：4 个数字
+  const [followCount, likeCount, bookmarkCount, commentCount, repliedCount] = await Promise.all([
+    db.from('follows').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('likes').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('is_from_character', true).then(r => r.count || 0),
+  ]);
+
   root.innerHTML = `
     <div class="card" style="padding:0;overflow:hidden;">
-      <div style="height:140px;${bannerStyle}"></div>
+      <div style="height:160px;${bannerStyle}"></div>
       <div style="padding:0 20px 20px;">
-        <div style="margin-top:-40px;display:flex;align-items:flex-end;gap:16px;">
-          <div style="border:4px solid #fff;border-radius:50%;background:#fff;">${userAvatarHTML(currentProfile, 88)}</div>
-          <div style="padding-bottom:8px;">
-            <div style="font-size:20px;font-weight:800;">${username}</div>
-            <div style="font-size:13px;color:var(--muted);margin-top:4px;">
-              ${factionIcon(faction)} [${faction}] · 注册于 ${createdAt}
+        <div style="margin-top:-48px;display:flex;align-items:flex-end;gap:16px;">
+          <div style="border:4px solid #fff;border-radius:50%;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.08);">${userAvatarHTML(currentProfile, 96)}</div>
+          <div style="padding-bottom:8px;flex:1;">
+            <div style="font-size:22px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              ${username}
+            </div>
+            <div style="font-size:14px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span style="display:inline-flex;align-items:center;gap:4px;background:var(--primary-light);color:var(--primary-dark);padding:2px 10px;border-radius:999px;font-weight:600;font-size:13px;">
+                ${factionIcon(faction)} ${faction} · ${title}
+              </span>
             </div>
           </div>
+          <div style="padding-bottom:8px;">
+            <a href="settings.html" class="btn" style="font-size:13px;">编辑资料</a>
+          </div>
         </div>
+
         <div style="margin-top:16px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;">
           ${currentProfile.bio ? currentProfile.bio.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '<span style="color:var(--muted);">还没有填写简介</span>'}
         </div>
-        <div style="margin-top:16px;">
-          <a href="settings.html" class="btn" style="font-size:13px;">编辑资料</a>
+
+        <div style="margin-top:12px;font-size:13px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap;">
+          <span>📅 ${createdAt} 加入</span>
+          ${currentProfile.location ? `<span>📍 ${currentProfile.location.replace(/</g,'&lt;')}</span>` : ''}
+          ${repliedCount > 0 ? `<span>💬 被角色回复过 <b style="color:var(--primary-dark);">${repliedCount}</b> 次</span>` : ''}
         </div>
       </div>
     </div>
+
+    <div class="card" style="display:flex;justify-content:space-around;text-align:center;padding:16px 8px;">
+      <div>
+        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${followCount}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">关注角色</div>
+      </div>
+      <div>
+        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${likeCount}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">点赞</div>
+      </div>
+      <div>
+        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${bookmarkCount}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">收藏</div>
+      </div>
+      <div>
+        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${commentCount}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">评论</div>
+      </div>
+    </div>
+
     <div class="profile-tabs" id="profile-tabs">
       <button class="active" data-tab="follows">我的关注</button>
       <button data-tab="likes">我的点赞</button>
@@ -877,7 +925,6 @@ async function initProfile() {
     <div id="user-tab-content"></div>
   `;
 
-  // 复用原来的标签页逻辑
   const renderUserTab = async (tab) => {
     const container = $('#user-tab-content');
     container.innerHTML = '<div class="empty">加载中...</div>';
@@ -1098,6 +1145,14 @@ async function initSettings() {
     </div>
 
     <div class="card">
+      <h3>位置</h3>
+      <div style="display:flex;gap:8px;">
+        <input id="new-location" type="text" value="${currentProfile.location || ''}" placeholder="你在哪（例如：红叶镇）" maxlength="30" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <button class="btn btn-primary" onclick="updateLocation()">保存</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>简介</h3>
       <textarea id="new-bio" maxlength="200" placeholder="一句话介绍自己（最多 200 字）" style="width:100%;min-height:80px;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;resize:vertical;">${currentProfile.bio || ''}</textarea>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
@@ -1165,6 +1220,16 @@ async function updateBio() {
   if (error) return showToast('保存失败：' + error.message);
   currentProfile.bio = bio;
   showToast('简介已保存');
+}
+
+async function updateLocation() {
+  const loc = document.getElementById('new-location').value.trim();
+  if (loc.length > 30) return showToast('位置最多 30 字');
+  if (await containsSensitiveWord(loc)) return showToast('位置包含敏感词，请修改后重试');
+  const { error } = await db.from('profiles').update({ location: loc }).eq('id', currentUser.id);
+  if (error) return showToast('保存失败：' + error.message);
+  currentProfile.location = loc;
+  showToast('位置已保存');
 }
 
 async function updatePassword() {
