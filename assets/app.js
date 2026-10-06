@@ -1084,7 +1084,7 @@ async function initSettings() {
         <div style="position:relative;">
           <div style="border:4px solid #fff;border-radius:50%;display:inline-block;">${userAvatarHTML(currentProfile, 84)}</div>
         </div>
-        <button class="btn" onclick="" style="margin-top:44px;">更换头像</button>
+        <button class="btn" onclick="pickAndUpload('avatars', 400, 400, 100, 'avatar_url', 1)">更换头像</button>
       </div>
       <p style="font-size:12px;color:var(--muted);margin-top:16px;">头像建议 400×400，背景建议 1200×400，会压缩成 WebP。</p>
     </div>
