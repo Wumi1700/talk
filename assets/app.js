@@ -864,67 +864,6 @@ async function initProfile() {
   });
 }
 
-  const renderUserTab = async (tab) => {
-    const container = $('#user-tab-content');
-    container.innerHTML = '<div class="empty">加载中...</div>';
-
-    if (tab === 'follows') {
-  const { data: followData } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
-  const ids = (followData || []).map(f => f.character_id);
-  const followedChars = ids.map(id => CHARACTERS[id]).filter(Boolean);
-  if (!followedChars.length) return container.innerHTML = '<div class="empty">你还没有关注任何角色</div>';
-  container.innerHTML = followedChars.map(c => `
-    <div class="card" style="display:flex;align-items:center;gap:12px;">
-      ${avatarHTML(c)}
-      <div style="flex:1;">
-        <div style="font-weight:600;"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
-        <div style="font-size:13px;color:var(--muted);">@${c.handle} · ${c.bio || ''}</div>
-      </div>
-      <button class="btn btn-primary" onclick="unfollowFromProfile('${c.handle}', this)">已关注</button>
-    </div>
-  `).join('');
-  return;
-}
-    if (tab === 'likes') {
-      const { data: likesData } = await db.from('likes').select('post_id').eq('user_id', currentUser.id);
-      const ids = (likesData || []).map(l => l.post_id);
-      const likedPosts = POSTS.filter(p => ids.includes(p.id));
-      if (!likedPosts.length) return container.innerHTML = '<div class="empty">你还没有点赞过帖子</div>';
-      const html = await Promise.all(likedPosts.map(renderPostCard));
-      container.innerHTML = html.join('');
-    } else if (tab === 'bookmarks') {
-      const { data: bkData } = await db.from('bookmarks').select('post_id').eq('user_id', currentUser.id);
-      const ids = (bkData || []).map(b => b.post_id);
-      const bkPosts = POSTS.filter(p => ids.includes(p.id));
-      if (!bkPosts.length) return container.innerHTML = '<div class="empty">你还没有收藏过帖子</div>';
-      const html = await Promise.all(bkPosts.map(renderPostCard));
-      container.innerHTML = html.join('');
-    } else if (tab === 'comments') {
-      const { data: cmData } = await db.from('comments').select('content, post_id, created_at').eq('user_id', currentUser.id).order('created_at', { ascending: false });
-      if (!cmData || !cmData.length) return container.innerHTML = '<div class="empty">你还没有发过评论</div>';
-      container.innerHTML = cmData.map(c => {
-        const post = POSTS.find(p => p.id === c.post_id);
-        const postTitle = post ? post.content.slice(0, 30) + '...' : '（帖子已删除）';
-        return `<div class="card" style="margin-bottom:10px;">
-          <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">评论了帖子：${postTitle}</div>
-          <div style="font-size:14px;background:var(--bg);padding:8px;border-radius:8px;">${c.content}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px;">${new Date(c.created_at).toLocaleString('zh-CN')}</div>
-        </div>`;
-      }).join('');
-    }
-  };
-
-  renderUserTab('likes');
-
-  $$('#profile-tabs button').forEach(b => {
-    b.addEventListener('click', async () => {
-      $$('#profile-tabs button').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      await renderUserTab(b.dataset.tab);
-    });
-  });
-}
-
 // ===== 11. 页面入口 =====
 async function initHome() {
   await checkUser();
