@@ -837,6 +837,52 @@ async function submitMessage(charHandle) {
   await initMessage();
 }
 
+// ===== 用户统计 =====
+async function getUserStats() {
+  if (!currentUser) return null;
+  const [follow, like, bookmark, comment, message, replied] = await Promise.all([
+    db.from('follows').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('likes').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
+    db.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('is_from_character', true).then(r => r.count || 0),
+  ]);
+  const joinedDays = Math.floor((Date.now() - new Date(currentUser.created_at).getTime()) / 86400000);
+  return { follow, like, bookmark, comment, message, replied, joinedDays };
+}
+
+// ===== 成就渲染 =====
+function renderAchievements(s) {
+  const list = [
+    { icon: '🌱', name: '初次登场', desc: '完成注册并选择阵营', unlocked: true },
+    { icon: '♡', name: '第一次点赞', desc: '为任意帖子点过赞', unlocked: s.like > 0 },
+    { icon: '💬', name: '第一次发言', desc: '发表过评论', unlocked: s.comment > 0 },
+    { icon: '🔖', name: '第一次收藏', desc: '收藏过帖子', unlocked: s.bookmark > 0 },
+    { icon: '✉️', name: '第一封信', desc: '给角色发过私信', unlocked: s.message > 0 },
+    { icon: '👥', name: '关注五人', desc: '关注 5 个角色', unlocked: s.follow >= 5 },
+    { icon: '💫', name: '被回应', desc: '被角色回复过私信', unlocked: s.replied > 0 },
+    { icon: '📅', name: '旅者', desc: '加入满 7 天', unlocked: s.joinedDays >= 7 },
+    { icon: '🌟', name: '老旅者', desc: '加入满 30 天', unlocked: s.joinedDays >= 30 },
+    { icon: '🏆', name: '资深旅者', desc: '加入满 100 天', unlocked: s.joinedDays >= 100 },
+  ];
+  const unlockedCount = list.filter(a => a.unlocked).length;
+  return `
+    <div class="card">
+      <h3>成就 <span style="font-size:13px;color:var(--muted);font-weight:400;">已解锁 ${unlockedCount} / ${list.length}</span></h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px;">
+        ${list.map(a => `
+          <div style="text-align:center;padding:14px 8px;border-radius:10px;background:${a.unlocked ? 'var(--primary-light)' : 'var(--bg)'};border:1px solid ${a.unlocked ? 'var(--primary)' : 'var(--border)'};opacity:${a.unlocked ? 1 : 0.55};">
+            <div style="font-size:28px;margin-bottom:6px;filter:${a.unlocked ? 'none' : 'grayscale(1)'};">${a.icon}</div>
+            <div style="font-size:13px;font-weight:600;color:${a.unlocked ? 'var(--primary-dark)' : 'var(--text-muted)'};">${a.name}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4;">${a.desc}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
 // ===== 10. 用户个人主页 =====
 async function initProfile() {
   await checkUser();
@@ -856,13 +902,13 @@ async function initProfile() {
     : `background:linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);`;
 
   // 统计：4 个数字
-  const [followCount, likeCount, bookmarkCount, commentCount, repliedCount] = await Promise.all([
-    db.from('follows').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
-    db.from('likes').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
-    db.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
-    db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).then(r => r.count || 0),
-    db.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('is_from_character', true).then(r => r.count || 0),
-  ]);
+  const stats = await getUserStats();
+  const followCount = stats.follow;
+  const likeCount = stats.like;
+  const bookmarkCount = stats.bookmark;
+  const commentCount = stats.comment;
+  const repliedCount = stats.replied;
+  const joinedDays = stats.joinedDays;
 
   root.innerHTML = `
     <div class="card" style="padding:0;overflow:hidden;">
@@ -890,7 +936,7 @@ async function initProfile() {
         </div>
 
         <div style="margin-top:12px;font-size:13px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap;">
-          <span>📅 ${createdAt} 加入</span>
+          <span>📅 ${createdAt} 加入 · 已活跃 <b style="color:var(--primary-dark);">${joinedDays}</b> 天</span>
           ${currentProfile.location ? `<span>📍 ${currentProfile.location.replace(/</g,'&lt;')}</span>` : ''}
           ${repliedCount > 0 ? `<span>💬 被角色回复过 <b style="color:var(--primary-dark);">${repliedCount}</b> 次</span>` : ''}
         </div>
@@ -916,6 +962,7 @@ async function initProfile() {
       </div>
     </div>
 
+    ${renderAchievements({ follow: followCount, like: likeCount, bookmark: bookmarkCount, comment: commentCount, message: 0, replied: repliedCount, joinedDays })}
     <div class="profile-tabs" id="profile-tabs">
       <button class="active" data-tab="follows">我的关注</button>
       <button data-tab="likes">我的点赞</button>
