@@ -375,7 +375,12 @@ async function handleLogout() {
 async function chooseFaction(faction) {
   if (!currentUser) return;
   const username = prompt('请输入你的昵称：') || '新用户';
-  const { error } = await db.from('profiles').insert({ id: currentUser.id, username: username, faction: faction });
+  const { error } = await db.from('profiles').insert({
+    id: currentUser.id,
+    username: username,
+    faction: faction,
+    faction_chosen_at: new Date().toISOString()
+  });
   if (error) return showToast('选阵营失败：' + error.message);
   showToast('欢迎加入 ' + faction + ' 阵营！'); $('#faction-modal').style.display = 'none'; checkUser();
 }
@@ -1246,6 +1251,15 @@ async function initSettings() {
     </div>
 
     <div class="card">
+      <h3>阵营</h3>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:10px;">
+        当前阵营：${factionIcon(currentProfile.faction)} <b style="color:var(--primary-dark);">${currentProfile.faction}</b>
+      </div>
+      <button class="btn" id="change-faction-btn" onclick="changeFaction()">重新选择阵营</button>
+      <div id="faction-cooldown" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
       <h3>退出登录</h3>
       <button class="btn" onclick="handleLogout()">退出当前账号</button>
     </div>
@@ -1270,6 +1284,76 @@ async function initSettings() {
 
   // 昵称冷却显示
   showUsernameCooldown();
+
+  // 阵营冷却检测
+  showFactionCooldown();
+}
+
+function showFactionCooldown() {
+  const btn = document.getElementById('change-faction-btn');
+  const el = document.getElementById('faction-cooldown');
+  if (!btn || !el) return;
+
+  // 如果数据库里没记录，先补上"现在"
+  if (!currentProfile.faction_chosen_at) {
+    db.from('profiles').update({ faction_chosen_at: new Date().toISOString() }).eq('id', currentUser.id);
+    currentProfile.faction_chosen_at = new Date().toISOString();
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    el.textContent = '阵营已锁定，还需 90 天才能修改。';
+    return;
+  }
+
+  const last = new Date(currentProfile.faction_chosen_at).getTime();
+  const days = (Date.now() - last) / 86400000;
+  if (days < 90) {
+    const remain = Math.ceil(90 - days);
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    el.textContent = `经常变动会让你找不到家（还需 ${remain} 天）`;
+  } else {
+    el.textContent = '已满 3 个月，可以重新选择阵营。';
+  }
+}
+
+function changeFaction() {
+  const ok = confirm('重新选择阵营将清空你之前阵营的全部任务进度与特殊声望，确定要离开当前阵营吗？');
+  if (!ok) return;
+
+  const root = document.getElementById('settings-app');
+  root.innerHTML = `
+    <div class="card" style="max-width:520px;margin:0 auto;">
+      <h3>重新选择阵营</h3>
+      <p style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.8;">
+        离开一个阵营，就回不去了。<br>
+        选定后 3 个月内不可再更改。
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;">
+        <button class="btn" onclick="confirmFactionChange('精灵')" style="padding:16px;font-size:16px;">🦌 精灵 · 旅人</button>
+        <button class="btn" onclick="confirmFactionChange('矮人')" style="padding:16px;font-size:16px;">⚒️ 矮人 · 锻造学徒</button>
+        <button class="btn" onclick="confirmFactionChange('人类')" style="padding:16px;font-size:16px;">⭐ 人类 · 见习法师</button>
+        <button class="btn" onclick="initSettings()" style="padding:12px;margin-top:12px;">取消</button>
+      </div>
+    </div>
+  `;
+}
+
+async function confirmFactionChange(faction) {
+  const ok = confirm('确定加入 ' + faction + ' 阵营吗？这是最后一次确认。');
+  if (!ok) return;
+
+  const { error } = await db.from('profiles').update({
+    faction: faction,
+    faction_chosen_at: new Date().toISOString()
+  }).eq('id', currentUser.id);
+  if (error) return showToast('修改失败：' + error.message);
+
+  currentProfile.faction = faction;
+  currentProfile.faction_chosen_at = new Date().toISOString();
+  showToast('你已加入 ' + faction + ' 阵营');
+  applyFactionTheme();
+  updateUIForLoggedIn();
+  setTimeout(() => initSettings(), 500);
 }
 
 function initLocationSelectors() {
