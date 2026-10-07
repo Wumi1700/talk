@@ -10,6 +10,19 @@ let currentProfile = null;
 // ===== 3. 工具函数 =====
 function $(sel, root = document) { return root.querySelector(sel); }
 function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
+// ===== 位置数据 =====
+const LOCATIONS = {
+  '417号航线': ['绿林', '荒芜地', '红叶镇', '石地', '白地', '洞穴', '山地'],
+  '240号航线': ['72号老城', '圣彼得庄园', '白社区', '阿姆斯门特', '幸福泉', '下城警局', '混乱世界管理局', '中央法院', '黑皇后社区'],
+  '无定所': ['流浪旅者'],
+  '未知之地': ['未标记区域']
+};
+
+function parseLocation(str) {
+  if (!str) return { region: '', detail: '' };
+  const parts = str.split('·');
+  return { region: parts[0] || '', detail: parts[1] || '' };
+}
 //======阵营称号========
 function factionTitle(faction) {
   if (faction === '精灵') return '旅人';
@@ -1187,17 +1200,21 @@ async function initSettings() {
     <div class="card">
       <h3>昵称</h3>
       <div style="display:flex;gap:8px;">
-        <input id="new-username" type="text" value="${currentProfile.username || ''}" placeholder="输入新昵称" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <input id="new-username" type="text" value="${currentProfile.username || ''}" placeholder="输入新昵称" maxlength="20" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
         <button class="btn btn-primary" onclick="updateUsername()">保存</button>
       </div>
+      <div id="name-cooldown" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
     </div>
 
     <div class="card">
-      <h3>位置</h3>
-      <div style="display:flex;gap:8px;">
-        <input id="new-location" type="text" value="${currentProfile.location || ''}" placeholder="你在哪（例如：红叶镇）" maxlength="30" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
-        <button class="btn btn-primary" onclick="updateLocation()">保存</button>
+      <h3>灵魂驻地</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">这里只认基塔世界的驻地，与现实位置无关。30 天内只能修改一次。</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <select id="loc-region" onchange="onRegionChange()" style="flex:1;min-width:140px;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;"></select>
+        <select id="loc-detail" style="flex:1;min-width:140px;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;"></select>
+        <button class="btn btn-primary" onclick="updateLocation()" id="loc-save-btn">保存驻地</button>
       </div>
+      <div id="loc-cooldown" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
     </div>
 
     <div class="card">
@@ -1247,17 +1264,114 @@ async function initSettings() {
       document.getElementById('bio-count').textContent = bioEl.value.length;
     });
   }
+
+  // 初始化位置下拉
+  initLocationSelectors();
+
+  // 昵称冷却显示
+  showUsernameCooldown();
+}
+
+function initLocationSelectors() {
+  const regionSel = document.getElementById('loc-region');
+  const detailSel = document.getElementById('loc-detail');
+  const saveBtn = document.getElementById('loc-save-btn');
+  const cooldownEl = document.getElementById('loc-cooldown');
+  if (!regionSel || !detailSel) return;
+
+  const current = parseLocation(currentProfile.location);
+
+  // 填充大区
+  regionSel.innerHTML = '<option value="">选择航线 / 大区</option>' +
+    Object.keys(LOCATIONS).map(k =>
+      `<option value="${k}" ${k === current.region ? 'selected' : ''}>${k}</option>`
+    ).join('');
+
+  // 根据大区填二级
+  const fillDetail = () => {
+    const r = regionSel.value;
+    if (!r) {
+      detailSel.innerHTML = '<option value="">请先选择大区</option>';
+      return;
+    }
+    detailSel.innerHTML = '<option value="">选择具体位置</option>' +
+      LOCATIONS[r].map(d =>
+        `<option value="${d}" ${d === current.detail ? 'selected' : ''}>${d}</option>`
+      ).join('');
+  };
+  fillDetail();
+
+  // 检查冷却
+  if (currentProfile.location_updated_at) {
+    const last = new Date(currentProfile.location_updated_at).getTime();
+    const days = (Date.now() - last) / 86400000;
+    if (days < 30) {
+      const remain = Math.ceil(30 - days);
+      regionSel.disabled = true;
+      detailSel.disabled = true;
+      if (saveBtn) saveBtn.disabled = true;
+      if (saveBtn) saveBtn.style.opacity = '0.5';
+      if (cooldownEl) cooldownEl.textContent = `驻地已锁定，还需 ${remain} 天才能修改。`;
+    } else {
+      if (cooldownEl) cooldownEl.textContent = '已满 30 天，可以修改驻地。';
+    }
+  }
+}
+
+function onRegionChange() {
+  const regionSel = document.getElementById('loc-region');
+  const detailSel = document.getElementById('loc-detail');
+  const r = regionSel.value;
+  if (!r) {
+    detailSel.innerHTML = '<option value="">请先选择大区</option>';
+    return;
+  }
+  detailSel.innerHTML = '<option value="">选择具体位置</option>' +
+    LOCATIONS[r].map(d => `<option value="${d}">${d}</option>`).join('');
+}
+
+function showUsernameCooldown() {
+  const el = document.getElementById('name-cooldown');
+  if (!el) return;
+  if (!currentProfile.username_updated_at) {
+    el.textContent = '';
+    return;
+  }
+  const last = new Date(currentProfile.username_updated_at).getTime();
+  const days = (Date.now() - last) / 86400000;
+  if (days < 30) {
+    const remain = Math.ceil(30 - days);
+    el.textContent = `改名冷却中，还需 ${remain} 天。`;
+  } else {
+    el.textContent = '已满 30 天，可以改名。';
+  }
 }
 
 async function updateUsername() {
-  const newName = $('#new-username').value.trim();
+  const newName = document.getElementById('new-username').value.trim();
   if (!newName) return showToast('昵称不能为空');
   if (newName.length > 20) return showToast('昵称最多20个字');
-  const { error } = await db.from('profiles').update({ username: newName }).eq('id', currentUser.id);
+  if (await containsSensitiveWord(newName)) return showToast('昵称包含敏感词，请修改后重试');
+
+  // 冷却检查
+  if (currentProfile.username_updated_at) {
+    const last = new Date(currentProfile.username_updated_at).getTime();
+    if ((Date.now() - last) / 86400000 < 30) {
+      return showToast('昵称已锁定，30 天内只能修改一次');
+    }
+  }
+
+  const { error } = await db.from('profiles').update({
+    username: newName,
+    username_updated_at: new Date().toISOString()
+  }).eq('id', currentUser.id);
   if (error) return showToast('修改失败：' + error.message);
+
   currentProfile.username = newName;
-  showToast('你换了个称呼');
+  currentProfile.username_updated_at = new Date().toISOString();
+  showToast('你换了个昵称');
   updateUIForLoggedIn();
+  showUsernameCooldown();
 }
 
 async function updateBio() {
@@ -1271,13 +1385,29 @@ async function updateBio() {
 }
 
 async function updateLocation() {
-  const loc = document.getElementById('new-location').value.trim();
-  if (loc.length > 30) return showToast('位置最多 30 字');
-  if (await containsSensitiveWord(loc)) return showToast('位置包含敏感词，请修改后重试');
-  const { error } = await db.from('profiles').update({ location: loc }).eq('id', currentUser.id);
+  const region = document.getElementById('loc-region').value;
+  const detail = document.getElementById('loc-detail').value;
+  if (!region || !detail) return showToast('请先选择大区和具体位置');
+
+  // 冷却检查
+  if (currentProfile.location_updated_at) {
+    const last = new Date(currentProfile.location_updated_at).getTime();
+    if ((Date.now() - last) / 86400000 < 30) {
+      return showToast('驻地已锁定，30 天内只能修改一次');
+    }
+  }
+
+  const full = region + '·' + detail;
+  const { error } = await db.from('profiles').update({
+    location: full,
+    location_updated_at: new Date().toISOString()
+  }).eq('id', currentUser.id);
   if (error) return showToast('保存失败：' + error.message);
-  currentProfile.location = loc;
-  showToast('位置已保存');
+
+  currentProfile.location = full;
+  currentProfile.location_updated_at = new Date().toISOString();
+  showToast('驻地已保存');
+  initSettings();
 }
 
 async function updatePassword() {
