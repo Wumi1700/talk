@@ -602,19 +602,32 @@ async function loadComments(postId) {
 }
 
   function renderOne(c, isReply) {
-    const name = (currentUser && c.user_id === currentUser.id) ? (currentProfile?.username || '我') : '读者';
+    const p = profileMap[c.user_id] || {};
+    const isMe = currentUser && c.user_id === currentUser.id;
+    const displayName = p.username || '匿名旅者';
+    const nameHTML = isMe
+      ? `<b>${displayName.replace(/</g,'&lt;')}</b>`
+      : `<a href="user.html?id=${c.user_id}" style="color:var(--primary-dark);font-weight:600;">${displayName.replace(/</g,'&lt;')}</a>`;
+    const avatarHTMLSmall = userAvatarHTML(p, 24);
+    const factionIconHTML = p.faction ? factionIcon(p.faction) + ' ' : '';
+
     const count = likeCounts[c.id] || 0;
     const liked = !!likedByMe[c.id];
+    const canDelete = isMe;
     return `
       <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
-        <div><b>${name}</b>：${c.content}</div>
-        <div style="margin-top:6px;display:flex;gap:12px;">
-         <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
-           <span class="heart-icon">${liked ? '♥' : '♡'}</span> <span class="like-count">${count}</span>
-         </button>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          ${avatarHTMLSmall}
+          <span>${factionIconHTML}${nameHTML}</span>
+        </div>
+        <div style="word-break:break-word;line-height:1.6;">${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
+          <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
+            <span class="heart-icon">${liked ? '♥' : '♡'}</span> <span class="like-count">${count}</span>
+          </button>
           <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
           <button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>
-          ${currentUser && c.user_id === currentUser.id ? `<button onclick="deleteOwnComment('${c.id}', '${postId}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">删除</button>` : ''}
+          ${canDelete ? `<button onclick="deleteOwnComment('${c.id}', '${postId}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">删除</button>` : ''}
         </div>
         <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
           <div style="display:flex;gap:6px;">
@@ -625,16 +638,6 @@ async function loadComments(postId) {
       </div>
     `;
   }
-
-  let html = '';
-  roots.forEach(c => {
-    html += renderOne(c, false);
-    (repliesMap[c.id] || []).forEach(r => {
-      html += renderOne(r, true);
-    });
-  });
-  list.innerHTML = html;
-}
 
 function showReplyBox(commentId) {
   const box = document.getElementById(`reply-box-${commentId}`);
