@@ -540,6 +540,7 @@ async function loadComments(postId) {
          </button>
           <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
           <button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>
+          ${currentUser && c.user_id === currentUser.id ? `<button onclick="deleteOwnComment('${c.id}', '${postId}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">删除</button>` : ''}
         </div>
         <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
           <div style="display:flex;gap:6px;">
@@ -1870,4 +1871,16 @@ async function submitNewPassword() {
 
   showToast('门已经打开了，欢迎回到基塔世界，旅者。');
   setTimeout(() => { location.href = 'index.html'; }, 1800);
+}
+
+async function deleteOwnComment(commentId, postId) {
+  if (!currentUser) return;
+  const ok = confirm('确定删除这条评论吗？删除后无法恢复。');
+  if (!ok) return;
+  const { error } = await db.from('comments').delete().eq('id', commentId).eq('user_id', currentUser.id);
+  if (error) return showToast('删除失败：' + error.message);
+  showToast('评论已删除');
+  await loadComments(postId);
+  const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
+  if (btn) btn.textContent = Math.max(0, parseInt(btn.textContent) - 1);
 }
