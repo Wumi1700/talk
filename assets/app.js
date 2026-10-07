@@ -1807,3 +1807,67 @@ async function adminIgnoreReport(reportId) {
   showToast('举报已忽略');
   await initAdmin();
 }
+
+// ===== 21. 密码重置 =====
+async function handleForgotPassword() {
+  const email = document.getElementById('auth-email').value;
+  if (!email) return showToast('请先在邮箱栏填写你的注册邮箱');
+
+  const last = localStorage.getItem('lastResetRequest');
+  if (last) {
+    const diff = Date.now() - parseInt(last);
+    if (diff < 24 * 3600 * 1000) {
+      const hours = Math.ceil((24 * 3600 * 1000 - diff) / 3600000);
+      return showToast('同一邮箱 24 小时内只能申请一次，请 ' + hours + ' 小时后再试');
+    }
+  }
+
+  const redirectTo = location.origin + location.pathname.replace(/[^/]*$/, '') + 'reset-password.html';
+  const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) return showToast('发送失败：' + error.message);
+
+  localStorage.setItem('lastResetRequest', Date.now().toString());
+  closeAuthModal();
+  showToast('重置邮件已发送，请查收邮箱');
+  alert('已向 ' + email + ' 发送重置链接。\n\n请打开邮件里的链接，会跳转回本网站设置新密钥。\n如果 10 分钟没收到，请检查垃圾邮件。');
+}
+
+async function initResetPassword() {
+  await checkUser();
+
+  // Supabase 重置链接回来时，URL 里会带 access_token，SDK 会自动处理 session
+  // 直接检查当前用户是否处于"重置密码"状态
+  const root = $('#reset-app');
+  const hash = location.hash || '';
+  const isRecovery = hash.includes('type=recovery') || hash.includes('access_token');
+
+  root.innerHTML = `
+    <div class="card" style="max-width:480px;margin:40px auto;">
+      <h3>重置密钥</h3>
+      <p style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.8;">
+        输入你的新密钥（密码）。<br>
+        重置成功后，你就可以用新密钥回到 TALK。
+      </p>
+      <input id="reset-pwd-1" type="password" placeholder="新密钥（至少6位）" style="width:100%;padding:10px;margin-top:16px;border:1px solid var(--border);border-radius:8px;">
+      <input id="reset-pwd-2" type="password" placeholder="再次输入新密钥" style="width:100%;padding:10px;margin-top:10px;border:1px solid var(--border);border-radius:8px;">
+      <button class="btn btn-primary" onclick="submitNewPassword()" style="width:100%;margin-top:16px;">确认重置</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:16px;line-height:1.7;">
+        如果这个页面没有反应，说明重置链接已失效。<br>
+        请回到登录页重新点击"钥匙丢失？"。
+      </p>
+    </div>
+  `;
+}
+
+async function submitNewPassword() {
+  const p1 = document.getElementById('reset-pwd-1').value;
+  const p2 = document.getElementById('reset-pwd-2').value;
+  if (!p1 || p1.length < 6) return showToast('新密钥至少 6 位');
+  if (p1 !== p2) return showToast('两次输入不一致');
+
+  const { error } = await db.auth.updateUser({ password: p1 });
+  if (error) return showToast('重置失败：' + error.message);
+
+  showToast('门已经打开了，欢迎回到基塔世界，旅者。');
+  setTimeout(() => { location.href = 'index.html'; }, 1800);
+}
