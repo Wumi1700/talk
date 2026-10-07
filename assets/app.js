@@ -537,13 +537,69 @@ async function loadComments(postId) {
     });
   }
 
-  // 组织树形结构：顶级评论 + 回复
+  // 批量查所有评论者的昵称和头像
+  const userIds = [...new Set(data.map(c => c.user_id).filter(Boolean))];
+  const profileMap = {};
+  if (userIds.length) {
+    const { data: profiles } = await db.from('profiles').select('id, username, avatar_url, faction').in('id', userIds);
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+  }
+
+  // 组织树形结构
   const roots = data.filter(c => !c.parent_id);
   const repliesMap = {};
   data.filter(c => c.parent_id).forEach(c => {
     if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
     repliesMap[c.parent_id].push(c);
   });
+
+  function renderOne(c, isReply) {
+    const p = profileMap[c.user_id] || {};
+    const isMe = currentUser && c.user_id === currentUser.id;
+    const displayName = p.username || '匿名旅者';
+    const nameHTML = isMe
+      ? `<b>${displayName.replace(/</g,'&lt;')}</b>`
+      : `<a href="user.html?id=${c.user_id}" style="color:var(--primary-dark);font-weight:600;">${displayName.replace(/</g,'&lt;')}</a>`;
+    const avatarHTMLSmall = userAvatarHTML(p, 24);
+    const factionIconHTML = p.faction ? factionIcon(p.faction) + ' ' : '';
+
+    const count = likeCounts[c.id] || 0;
+    const liked = !!likedByMe[c.id];
+    const canDelete = isMe;
+    return `
+      <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          ${avatarHTMLSmall}
+          <span>${factionIconHTML}${nameHTML}</span>
+        </div>
+        <div style="word-break:break-word;line-height:1.6;">${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
+          <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
+            <span class="heart-icon">${liked ? '♥' : '♡'}</span> <span class="like-count">${count}</span>
+          </button>
+          <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
+          <button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>
+          ${canDelete ? `<button onclick="deleteOwnComment('${c.id}', '${postId}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">删除</button>` : ''}
+        </div>
+        <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
+          <div style="display:flex;gap:6px;">
+            <input id="reply-input-${c.id}" type="text" maxlength="500" placeholder="回复..." style="flex:1;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <button class="btn btn-primary" onclick="submitReply('${postId}', '${c.id}')" style="padding:6px 12px;font-size:13px;">发送</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  let html = '';
+  roots.forEach(c => {
+    html += renderOne(c, false);
+    (repliesMap[c.id] || []).forEach(r => {
+      html += renderOne(r, true);
+    });
+  });
+  list.innerHTML = html;
+}
 
   function renderOne(c, isReply) {
     const name = (currentUser && c.user_id === currentUser.id) ? (currentProfile?.username || '我') : '读者';
@@ -2097,4 +2153,115 @@ async function deleteOwnComment(commentId, postId) {
   await loadComments(postId);
   const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
   if (btn) btn.textContent = Math.max(0, parseInt(btn.textContent) - 1);
+}
+
+// ===== 22. 旅者档案（看别人的主页） =====
+async function initUserProfileView() {
+  await checkUser();
+  await loadData();
+  const root = $('#user-profile-view');
+  const userId = new URLSearchParams(location.search).get('id');
+
+  if (!userId) {
+    root.innerHTML = '<div class="empty">没有指定旅者</div>';
+    return;
+  }
+
+  // 自己的档案 → 跳回 profile.html
+  if (currentUser && currentUser.id === userId) {
+    location.href = 'profile.html';
+    return;
+  }
+
+  // 查目标用户 profile
+  const { data: profile, error } = await db.from('profiles').select('*').eq('id', userId).single();
+  if (error || !profile) {
+    root.innerHTML = '<div class="empty">找不到这位旅者</div>';
+    return;
+  }
+
+  // 查 Auth 里的注册时间
+  const { data: { user: targetUser } } = await db.rpc('get_user_created_at', { uid: userId }).then(
+    r => ({ data: { user: r.data ? { created_at: r.data } : null } }),
+    () => ({ data: { user: null } })
+  ).catch(() => ({ data: { user: null } }));
+
+  // 简化：注册时间从 profiles.created_at 取
+  const registeredAt = profile.created_at || new Date().toISOString();
+  const joinedDays = Math.max(0, Math.floor((Date.now() - new Date(registeredAt).getTime()) / 86400000));
+  const username = profile.username || '匿名旅者';
+  const faction = profile.faction || '人类';
+  const title = factionTitle(faction);
+
+  const bannerStyle = profile.banner_url
+    ? `background:url('${profile.banner_url}') center/cover no-repeat;`
+    : `background:linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);`;
+
+  root.innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="height:140px;${bannerStyle}"></div>
+      <div style="padding:0 20px 20px;">
+        <div style="margin-top:-40px;display:flex;align-items:flex-end;gap:16px;">
+          <div style="border:4px solid #fff;border-radius:50%;background:#fff;">${userAvatarHTML(profile, 88)}</div>
+          <div style="padding-bottom:8px;">
+            <div style="font-size:20px;font-weight:800;">${username.replace(/</g,'&lt;')}</div>
+            <div style="font-size:13px;color:var(--muted);margin-top:4px;">
+              <span style="display:inline-flex;align-items:center;gap:4px;background:var(--primary-light);color:var(--primary-dark);padding:2px 10px;border-radius:999px;font-weight:600;font-size:12px;">
+                ${factionIcon(faction)} ${faction} · ${title}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;">
+          ${profile.bio ? profile.bio.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '<span style="color:var(--muted);">这位旅者没有留下介绍</span>'}
+        </div>
+        <div style="margin-top:12px;font-size:13px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap;">
+          <span>📅 降临这个世界第 <b style="color:var(--primary-dark);">${joinedDays}</b> 天</span>
+          ${profile.location ? `<span>📍 ${profile.location.replace(/</g,'&lt;')}</span>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div class="profile-tabs" id="user-profile-tabs">
+      <button class="active" data-tab="comments">公开评论</button>
+      <button data-tab="likes">公开点赞</button>
+    </div>
+    <div id="user-profile-tab-content"></div>
+  `;
+
+  const renderUserProfileTab = async (tab) => {
+    const container = $('#user-profile-tab-content');
+    container.innerHTML = '<div class="empty">加载中...</div>';
+
+    if (tab === 'comments') {
+      const { data: cmData } = await db.from('comments').select('content, post_id, created_at').eq('user_id', userId).eq('status', 'visible').order('created_at', { ascending: false }).limit(50);
+      if (!cmData || !cmData.length) return container.innerHTML = '<div class="empty">这位旅者还没有发过评论</div>';
+      container.innerHTML = cmData.map(c => {
+        const post = POSTS.find(p => p.id === c.post_id);
+        const postTitle = post ? post.content.slice(0, 30) + '...' : '（帖子已删除）';
+        return `<div class="card" style="margin-bottom:10px;">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">评论了帖子：${postTitle}</div>
+          <div style="font-size:14px;background:var(--bg);padding:8px;border-radius:8px;">${c.content.replace(/</g,'&lt;')}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;">${new Date(c.created_at).toLocaleString('zh-CN')}</div>
+        </div>`;
+      }).join('');
+    } else if (tab === 'likes') {
+      const { data: likeData } = await db.from('likes').select('post_id').eq('user_id', userId);
+      const ids = (likeData || []).map(l => l.post_id);
+      const likedPosts = POSTS.filter(p => ids.includes(p.id));
+      if (!likedPosts.length) return container.innerHTML = '<div class="empty">这位旅者还没有点赞过帖子</div>';
+      const html = await Promise.all(likedPosts.map(renderPostCard));
+      container.innerHTML = html.join('');
+    }
+  };
+
+  renderUserProfileTab('comments');
+
+  $$('#user-profile-tabs button').forEach(b => {
+    b.addEventListener('click', async () => {
+      $$('#user-profile-tabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      await renderUserProfileTab(b.dataset.tab);
+    });
+  });
 }
