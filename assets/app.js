@@ -28,6 +28,8 @@ function factionTitle(faction) {
   if (faction === '精灵') return '旅人';
   if (faction === '矮人') return '锻造学徒';
   if (faction === '人类') return '见习法师';
+  if (faction === '异人') return '泥娃娃';
+  if (faction === '240' || faction === '246' || faction === '240-1') return '人类';
   return '';
 }
 // ===== 阵营图标 =====
@@ -35,16 +37,26 @@ function factionIcon(faction) {
   if (faction === '精灵') return '🦌';
   if (faction === '矮人') return '⚒️';
   if (faction === '人类') return '⭐';
+  if (faction === '异人') return '🌲';
+  if (faction === '240') return '⚖️';
+  if (faction === '246') return '🔳';
+  if (faction === '240-1') return '💥';
   return '';
 }
 
 // ===== 应用阵营主题 =====
 function applyFactionTheme() {
-  document.body.classList.remove('faction-elf', 'faction-dwarf', 'faction-human');
+  document.body.classList.remove(
+    'faction-elf', 'faction-dwarf', 'faction-human', 'faction-alien',
+    'faction-240'
+  );
   if (!currentProfile || !currentProfile.faction) return;
-  if (currentProfile.faction === '精灵') document.body.classList.add('faction-elf');
-  else if (currentProfile.faction === '矮人') document.body.classList.add('faction-dwarf');
-  else if (currentProfile.faction === '人类') document.body.classList.add('faction-human');
+  const f = currentProfile.faction;
+  if (f === '精灵') document.body.classList.add('faction-elf');
+  else if (f === '矮人') document.body.classList.add('faction-dwarf');
+  else if (f === '人类') document.body.classList.add('faction-human');
+  else if (f === '异人') document.body.classList.add('faction-alien');
+  else if (f === '240' || f === '246' || f === '240-1') document.body.classList.add('faction-240');
 }
 function relativeTime(dateStr) {
   if (!dateStr) return '';
@@ -277,7 +289,7 @@ function updateUIForLoggedIn() {
     actions.style.gap = '10px';
     actions.innerHTML = `
       ${userAvatarHTML(currentProfile, 28)}
-      <span style="font-size:14px;font-weight:600;">${factionIcon(currentProfile.faction)} ${currentProfile.username || '用户'}</span>
+      <span style="font-size:14px;font-weight:600;">${factionIcon(currentProfile.faction)} [${currentProfile.faction}] ${currentProfile.username || '用户'}</span>
       <button class="btn" onclick="handleLogout()">退出</button>
     `;
   }
