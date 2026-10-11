@@ -4,6 +4,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===== 2. 全局变量 =====
+let forumReadOnly = false;
 let currentUser = null;
 let currentProfile = null;
 
@@ -658,6 +659,7 @@ function openImageViewer(src) {
 }
 
 async function renderPostCard(post) {
+  const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
   const tags = (post.tags || []).map(t => `<a class="tag" href="#">#${t}</a>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
@@ -687,10 +689,9 @@ async function renderPostCard(post) {
       ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="toggleLike('${post.id}', this)"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount || 0}</span></button>
-        <button class="action" onclick="toggleCommentArea('${post.id}')">💬 <span>${commentCount || 0}</span></button>
-        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="toggleBookmark('${post.id}', this)">🔖 <span>${isBookmarked ? '已收藏' : '收藏'}</span></button>
-      </div>
+       <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}">♡ <span>${likeCount || 0}</span></button>
+       <button class="action" onclick="${guard(`toggleCommentArea('${post.id}')`)}">💬 <span>${commentCount || 0}</span></button>
+       <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">🔖 <span>${isBookmarked ? '已赞同' : '赞同'}</span></button>
       <div id="comments-${post.id}" style="display:none; padding-top:12px; border-top:1px solid var(--border); margin-top:12px;">
         <div id="comments-list-${post.id}" style="margin-bottom:10px;"></div>
         <div style="display:flex; gap:8px;">
@@ -1999,10 +2000,12 @@ async function loadForumData() {
 
 async function initForum() {
   await checkUser();
-  if (currentProfile && currentProfile.is_banned) return;
   await loadData();
   await loadForumData();
+
   const root = $('#forum-app');
+  const sidebarRight = document.querySelector('.sidebar-right');
+
   if (!currentUser) {
     root.innerHTML = '<div class="empty">请先登录后再进入阵营论坛</div>';
     return;
@@ -2011,20 +2014,65 @@ async function initForum() {
     root.innerHTML = '<div class="empty">请先选择阵营</div>';
     return;
   }
-  const myFaction = currentProfile.faction;
-  const myPosts = FORUM_POSTS.filter(p => p.faction === myFaction);
 
-  root.innerHTML = `
+  const myFaction = currentProfile.faction;
+  const params = new URLSearchParams(location.search);
+  const viewingFaction = params.get('faction') || myFaction;
+  const isOwn = viewingFaction === myFaction;
+
+  // 关键：设置只读标记，renderPostCard 会读它
+  forumReadOnly = !isOwn;
+
+  const posts = FORUM_POSTS.filter(p => p.faction === viewingFaction);
+
+  const topBanner = `
     <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
-      <h3>${myFaction} · 阵营论坛</h3>
+      <h3>${factionIcon(viewingFaction)} ${viewingFaction} · 论坛 ${isOwn ? '' : '<span style="font-size:12px;color:var(--text-muted);font-weight:400;">（仅浏览）</span>'}</h3>
       <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">
-        这里只有 ${myFaction} 阵营的成员能看到。
+        ${isOwn ? '这里是你的阵营论坛。' : '你正在浏览其他阵营的论坛，只能查看，不能互动。'}
       </p>
     </div>
-    ${myPosts.length
-      ? (await Promise.all(myPosts.map(renderPostCard))).join('')
-      : '<div class="empty">这个阵营还没有帖子</div>'}
   `;
+
+  const postsHTML = posts.length
+    ? (await Promise.all(posts.map(p => renderPostCard(p)))).join('')
+    : '<div class="empty">这个阵营还没有帖子</div>';
+
+  root.innerHTML = topBanner + postsHTML;
+
+  // 右侧栏：阵营入口
+  if (sidebarRight) {
+    const allFactions = ['精灵', '矮人', '人类', '异人', '240', '246', '240-1'];
+    const others = allFactions.filter(f => f !== myFaction);
+    const linkStyle = (active) =>
+      `display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;text-decoration:none;font-size:14px;${active ? 'background:var(--primary-light);color:var(--primary-dark);font-weight:600;' : 'color:var(--text);'}`;
+
+    sidebarRight.innerHTML = `
+      <div class="card">
+        <h3>论坛列表</h3>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;">
+          <a href="forum.html?faction=${myFaction}" style="${linkStyle(viewingFaction === myFaction)}">
+            ${factionIcon(myFaction)} ${myFaction}（我的）
+          </a>
+          ${others.map(f => `
+            <a href="forum.html?faction=${f}" style="${linkStyle(viewingFaction === f)}">
+              ${factionIcon(f)} ${f}
+            </a>
+          `).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <h3>说明</h3>
+        <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px;">
+          · 你的阵营论坛可以自由互动。<br>
+          · 其他阵营论坛只能浏览，不能点赞、评论、收藏。
+        </p>
+      </div>
+    `;
+  }
+
+  // 离开页面时复位，防止影响其他页面
+  window.addEventListener('beforeunload', () => { forumReadOnly = false; });
 }
 
 // ===== 16. 顶部搜索框全局绑定 =====
