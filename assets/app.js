@@ -923,6 +923,7 @@ async function toggleCommentLike(commentId, btn) {
 
 async function submitComment(postId) {
   if (!currentUser) return showToast('请先登录');
+  if (forumReadOnly) return showToast('你不是这个阵营的成员');
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   const input = document.getElementById(`comment-input-${postId}`);
   const content = input.value.trim();
@@ -1440,6 +1441,13 @@ async function initPost() {
   await loadForumData();
   const id = new URLSearchParams(location.search).get('id');
   const post = POSTS.find(p => p.id === id) || FORUM_POSTS.find(p => p.id === id);
+    // 论坛帖如果是别人的阵营，标记只读
+  const isForumPost = FORUM_POSTS.some(p => p.id === id);
+  if (isForumPost && currentProfile && post.faction && post.faction !== currentProfile.faction) {
+    forumReadOnly = true;
+  } else {
+    forumReadOnly = false;
+  }
   const root = $('#post-detail');
   if (!post) {
     root.innerHTML = '<div class="empty">找不到这篇帖子</div>';
@@ -1456,8 +1464,8 @@ async function initPost() {
       <h3>评论</h3>
       <div id="comments-list-${post.id}" style="margin-top:10px;"></div>
       <div style="display:flex;gap:8px;margin-top:12px;">
-        <input id="comment-input-${post.id}" type="text" maxlength="500" placeholder="写下你的评论（最多500字）" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
-        <button class="btn btn-primary" onclick="submitComment('${post.id}')">发送</button>
+        <input id="comment-input-${post.id}" type="text" maxlength="500" placeholder="${forumReadOnly ? '你不是这个阵营的成员' : '写下你的评论（最多500字）'}" ${forumReadOnly ? 'disabled' : ''} style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;${forumReadOnly ? 'opacity:0.5;' : ''}">
+        <button class="btn btn-primary" onclick="submitComment('${post.id}')" ${forumReadOnly ? 'disabled style="opacity:0.5;"' : ''}>发送</button>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-top:6px;">每帖最多3条，每天最多10条。先发后审。</div>
     </div>
