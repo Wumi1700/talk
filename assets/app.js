@@ -1335,6 +1335,7 @@ async function initProfile() {
 
 // ===== 11. 页面入口 =====
 async function initHome() {
+  forumReadOnly = false;
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
@@ -1373,6 +1374,7 @@ async function initHome() {
 }
 
 async function initCharacter() {
+  forumReadOnly = false;
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
