@@ -33,6 +33,16 @@ body.faction-human {
   --primary-light: #D8E4F5;
   --page-bg: #EEF3FA;
 }
+body.faction-alien {
+  --primary: #7B5BA8;
+  --primary-dark: #5A3E85;
+  --primary-light: #EDE5F5;
+}
+body.faction-240 {
+  --primary: #C9A227;
+  --primary-dark: #9E7E1E;
+  --primary-light: #FAF3D8;
+}
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
