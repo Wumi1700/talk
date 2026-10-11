@@ -658,10 +658,9 @@ function openImageViewer(src) {
   document.body.appendChild(viewer);
 }
 
-async function renderPostCard(post) {
-  const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
+async function renderPostCard(post, isDetail = false) {
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
-  const tags = (post.tags || []).map(t => `<a class="tag" href="#">#${t}</a>`).join('');
+  const tags = (post.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
   const { count: likeCount } = await db.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
@@ -676,29 +675,24 @@ async function renderPostCard(post) {
     isBookmarked = bkDataArr && bkDataArr.length > 0;
   }
 
+  const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
+  const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a'))return;location.href='post.html?id=${post.id}'"`;
+
   return `
-    <article class="post" data-id="${post.id}">
+    <article class="post" data-id="${post.id}" ${cardClick}>
       <div class="post-header">
         ${avatarHTML(char)}
         <div class="post-meta">
-          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
+          <div class="post-name"><a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
           <div class="post-sub">@${char.handle} · ${relativeTime(post.date)}${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
       <div class="post-body">${renderMarkdown(post.content)}</div>
-      ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
-       <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}">♡ <span>${likeCount || 0}</span></button>
-       <button class="action" onclick="${guard(`toggleCommentArea('${post.id}')`)}">💬 <span>${commentCount || 0}</span></button>
-       <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">🔖 <span>${isBookmarked ? '已赞同' : '赞同'}</span></button>
-      <div id="comments-${post.id}" style="display:none; padding-top:12px; border-top:1px solid var(--border); margin-top:12px;">
-        <div id="comments-list-${post.id}" style="margin-bottom:10px;"></div>
-        <div style="display:flex; gap:8px;">
-          <input id="comment-input-${post.id}" type="text" maxlength="500" placeholder="写下你的评论（最多500字）" style="flex:1; padding:8px; border:1px solid var(--border); border-radius:8px;">
-          <button class="btn btn-primary" onclick="submitComment('${post.id}')">发送</button>
-        </div>
-        <div style="font-size:12px; color:var(--muted); margin-top:6px;">每帖最多3条，每天最多10条。先发后审。</div>
+        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount || 0}</span></button>
+        <button class="action" onclick="location.href='post.html?id=${post.id}'">💬 <span>${commentCount || 0}</span></button>
+        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">🔖 <span>${isBookmarked ? '已赞同' : '赞同'}</span></button>
       </div>
     </article>
   `;
@@ -740,17 +734,6 @@ async function toggleBookmark(postId, btn) {
     await db.from('bookmarks').insert({ post_id: postId, user_id: currentUser.id });
     btn.classList.add('bookmarked');
     span.textContent = '已收藏';
-  }
-}
-
-async function toggleCommentArea(postId) {
-  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
-  const area = document.getElementById(`comments-${postId}`);
-  if (area.style.display === 'none') {
-    area.style.display = 'block';
-    await loadComments(postId);
-  } else {
-    area.style.display = 'none';
   }
 }
 
@@ -1452,16 +1435,29 @@ async function initCharacter() {
 
 async function initPost() {
   await checkUser();
-  if (currentProfile && currentProfile.is_banned) return;
   await loadData();
   const id = new URLSearchParams(location.search).get('id');
   const post = POSTS.find(p => p.id === id);
   const root = $('#post-detail');
   if (!post) { root.innerHTML = '<div class="empty">找不到这篇帖子</div>'; return; }
+
   root.innerHTML = `
     <a href="index.html" style="font-size:14px">← 返回首页</a>
-    <div style="margin-top:16px">${await renderPostCard(post)}</div>
+    <div style="margin-top:16px">${await renderPostCard(post, true)}</div>
+    <div style="margin-top:16px;padding:44px 20px;text-align:center;background:var(--bg);border:2px dashed var(--border);border-radius:12px;color:var(--muted);font-size:14px;letter-spacing:2px;">
+      📢 广告位招租
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>评论</h3>
+      <div id="comments-list-${post.id}" style="margin-top:10px;"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <input id="comment-input-${post.id}" type="text" maxlength="500" placeholder="写下你的评论（最多500字）" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <button class="btn btn-primary" onclick="submitComment('${post.id}')">发送</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px;">每帖最多3条，每天最多10条。先发后审。</div>
+    </div>
   `;
+  await loadComments(post.id);
 }
 
 async function unfollowFromProfile(handle, btn) {
