@@ -1705,6 +1705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkNewReplies();
     await renderSidebar();
     await updateUnreadBadge();
+  } 
 });
 
 // ===== 14. 通知中心 =====
