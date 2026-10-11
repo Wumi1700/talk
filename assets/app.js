@@ -641,7 +641,7 @@ function renderPostImages(images) {
   const count = Math.min(images.length, 4);
   const cls = 'post-images post-images-' + count;
   return `<div class="${cls}">${images.slice(0, 4).map(img =>
-    `<img src="${img}" alt="" loading="lazy" onclick="openImageViewer('${img}')">`
+    `<img src="${img}" alt="" loading="lazy" onclick="event.stopPropagation();openImageViewer('${img}')">`
   ).join('')}</div>`;
 }
 
@@ -688,6 +688,7 @@ async function renderPostCard(post, isDetail = false) {
         </div>
       </div>
       <div class="post-body">${renderMarkdown(post.content)}</div>
+      ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
         <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount || 0}</span></button>
@@ -1436,6 +1437,7 @@ async function initCharacter() {
 async function initPost() {
   await checkUser();
   await loadData();
+  await loadForumData();
   const id = new URLSearchParams(location.search).get('id');
   const post = POSTS.find(p => p.id === id);
   const root = $('#post-detail');
