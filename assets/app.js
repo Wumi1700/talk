@@ -658,6 +658,7 @@ async function submitReply(postId, parentId) {
   const content = input.value.trim();
   if (!content) return showToast('请输入内容');
   if (await containsSensitiveWord(content)) return showToast('你的内容包含敏感词，请修改后重试');
+  if (containsLink(content)) return showToast('不允许发布外链或联系方式');
   if (content.length > 500) return showToast('回复最多500字');
 
   const { count: postCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId).eq('user_id', currentUser.id);
@@ -708,6 +709,7 @@ async function submitComment(postId) {
   if (await containsSensitiveWord(content)) {
     return showToast('你的内容包含敏感词，请修改后重试');
   }
+  if (containsLink(content)) return showToast('不允许发布外链或联系方式');
   if (!content) return showToast('请输入评论内容');
   if (content.length > 500) return showToast('评论最多500字');
 
@@ -891,6 +893,7 @@ async function submitMessage(charHandle) {
   if (await containsSensitiveWord(content)) {
     return showToast('你的内容包含敏感词，请修改后重试');
   }
+  if (containsLink(content)) return showToast('不允许发布外链或联系方式');
   if (!content) return showToast('请输入内容');
   if (content.length > 1000) return showToast('私信最多1000字');
 
@@ -1495,6 +1498,7 @@ async function updateUsername() {
   if (!newName) return showToast('昵称不能为空');
   if (newName.length > 20) return showToast('昵称最多20个字');
   if (await containsSensitiveWord(newName)) return showToast('昵称包含敏感词，请修改后重试');
+  if (containsLink(newName)) return showToast('昵称不允许包含外链');
 
   // 冷却检查
   if (currentProfile.username_updated_at) {
@@ -1520,6 +1524,7 @@ async function updateUsername() {
 async function updateBio() {
   const bio = document.getElementById('new-bio').value.trim();
   if (await containsSensitiveWord(bio)) return showToast('简介包含敏感词，请修改后重试');
+  if (containsLink(bio)) return showToast('简介不允许包含外链或联系方式');
   if (bio.length > 200) return showToast('简介最多 200 字');
   const { error } = await db.from('profiles').update({ bio: bio }).eq('id', currentUser.id);
   if (error) return showToast('保存失败：' + error.message);
@@ -1632,12 +1637,40 @@ async function renderSidebar() {
            ${l.alert ? `onclick="showToast('${l.alert}');return false;"` : ''} 
            class="${path === l.href ? 'active' : ''}">
           <span class="icon">${l.icon}</span> ${l.text}
-          ${l.badge ? `<span style="margin-left:auto;background:#E76F51;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;">${l.badge}</span>` : ''}
-        </a>
+          ${l.badge ? `<span class="unread-badge" style="margin-left:auto;background:#E76F51;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;">${l.badge}</span>` : ''}
       `).join('')}
     </nav>
   `;
 }
+
+// ===== 未读红点自动更新 =====
+async function updateUnreadBadge() {
+  if (!currentUser) return;
+  const unread = await getUnreadCount();
+  const link = document.querySelector('.sidebar-left a[href="notifications.html"]');
+  if (!link) return;
+  const oldBadge = link.querySelector('.unread-badge');
+  if (unread > 0) {
+    if (oldBadge) {
+      oldBadge.textContent = unread;
+    } else {
+      const span = document.createElement('span');
+      span.className = 'unread-badge';
+      span.style.cssText = 'margin-left:auto;background:#E76F51;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;';
+      span.textContent = unread;
+      link.appendChild(span);
+    }
+  } else if (oldBadge) {
+    oldBadge.remove();
+  }
+}
+
+// 启动轮询（每 30 秒）
+setInterval(() => {
+  if (currentUser) {
+    updateUnreadBadge();
+  }
+}, 30000);
 
 // 【新增】检测角色新回复，自动生成通知
 async function checkNewReplies() {
@@ -1668,6 +1701,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await checkUser();
   await renderSidebar();
   bindSearchBox();
+  if (currentUser) {
+    await checkNewReplies();
+    await renderSidebar();
+    await updateUnreadBadge();
 });
 
 // ===== 14. 通知中心 =====
@@ -1922,6 +1959,25 @@ async function containsSensitiveWord(text) {
   for (const w of sensitiveWords) {
     if (lower.includes(w.toLowerCase())) return true;
   }
+  return false;
+}
+
+// ===== 外链检测 =====
+function containsLink(text) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  // http / https
+  if (/https?:\/\//.test(lower)) return true;
+  // www.
+  if (/www\./.test(lower)) return true;
+  // 常见域名后缀
+  if (/\.(com|cn|net|org|io|me|xyz|top|cc|tv|info|biz|app|dev|co|gov|edu)(\b|\/|:|$)/.test(lower)) return true;
+  // 变体写法：hxxp、h t t p、h-t-t-p
+  if (/h[\s\-_.]*x[\s\-_.]*x[\s\-_.]*p/i.test(text)) return true;
+  // 变体：w w w
+  if (/w[\s\-_.]*w[\s\-_.]*w[\s\-_.]*\./i.test(text)) return true;
+  // IP 地址
+  if (/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(text)) return true;
   return false;
 }
 
