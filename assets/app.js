@@ -1439,9 +1439,12 @@ async function initPost() {
   await loadData();
   await loadForumData();
   const id = new URLSearchParams(location.search).get('id');
-  const post = POSTS.find(p => p.id === id);
+  const post = POSTS.find(p => p.id === id) || FORUM_POSTS.find(p => p.id === id);
   const root = $('#post-detail');
-  if (!post) { root.innerHTML = '<div class="empty">找不到这篇帖子</div>'; return; }
+  if (!post) {
+    root.innerHTML = '<div class="empty">找不到这篇帖子</div>';
+    return;
+  }
 
   root.innerHTML = `
     <a href="index.html" style="font-size:14px">← 返回首页</a>
