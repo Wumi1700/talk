@@ -3,21 +3,84 @@
     "name": "布兰森·丹尼尔",
     "nameEn": "Branson Daniel",
     "handle": "daniel",
-    "avatar": "images/characters/branson.webp",
-    "banner": "images/banners/bransonback.webp",
+    "avatar": "",
+    "banner": "",
     "bio": "天天开心",
     "baseFollowers": 10,
     "following": 0,
     "location": "417号航线",
     "verified": "高级福灵",
     "faction": "人类",
-    "follows": [],
-    "likes": [],
-    "bookmarks": [],
+    "follows": ["eileen", "marcus"],
+    "likes": ["2026-09-24-001", "2026-09-24-002"],
+    "bookmarks": ["2026-09-24-003"],
     "privacy": {
       "follows": true,
       "likes": true,
       "bookmarks": true
+    }
+  },
+  "tt": {
+    "name": "T-T",
+    "nameEn": "T-T",
+    "handle": "tt",
+    "avatar": "",
+    "banner": "",
+    "bio": "有问题找我。",
+    "baseFollowers": 9999,
+    "following": 0,
+    "location": "火柴盒管理局",
+    "verified": "官方小助手",
+    "faction": "",
+    "follows": [],
+    "likes": [],
+    "bookmarks": [],
+    "privacy": {
+      "follows": false,
+      "likes": false,
+      "bookmarks": false
+    }
+  },
+  "imrot": {
+    "name": "IMROT",
+    "nameEn": "IMROT",
+    "handle": "imrot",
+    "avatar": "",
+    "banner": "",
+    "bio": "嘀嘀嘀，已开门。",
+    "baseFollowers": 5000,
+    "following": 0,
+    "location": "火柴盒管理局",
+    "verified": "AI 小助手",
+    "faction": "",
+    "follows": [],
+    "likes": [],
+    "bookmarks": [],
+    "privacy": {
+      "follows": false,
+      "likes": false,
+      "bookmarks": false
+    }
+  },
+  "hotsearch": {
+    "name": "太五热搜",
+    "nameEn": "Taiwu Hot Search",
+    "handle": "hotsearch",
+    "avatar": "",
+    "banner": "",
+    "bio": "太五日报官方。有热搜消息请发我。",
+    "baseFollowers": 8888,
+    "following": 0,
+    "location": "太五日报总部",
+    "verified": "世界热搜",
+    "faction": "",
+    "follows": [],
+    "likes": [],
+    "bookmarks": [],
+    "privacy": {
+      "follows": false,
+      "likes": false,
+      "bookmarks": false
     }
   }
 }
