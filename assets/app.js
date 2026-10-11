@@ -10,6 +10,87 @@ let currentProfile = null;
 // ===== 3. 工具函数 =====
 function $(sel, root = document) { return root.querySelector(sel); }
 function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
+// ===== 阵营测试题库 =====
+const QUIZ_DATA = {
+  '417号航线': [
+    { q: '你更向往哪种环境？', options: [
+      { text: '森林与远方', faction: '精灵' },
+      { text: '熔炉与家园', faction: '矮人' },
+      { text: '城镇与学院', faction: '人类' },
+      { text: '荒野与部落', faction: '异人' },
+    ]},
+    { q: '面对冲突，你倾向于？', options: [
+      { text: '回避观察', faction: '精灵' },
+      { text: '正面硬刚', faction: '矮人' },
+      { text: '谈判周旋', faction: '人类' },
+      { text: '直接扑上去', faction: '异人' },
+    ]},
+    { q: '你认为自己最大的优势是？', options: [
+      { text: '感知与敏捷', faction: '精灵' },
+      { text: '力量与耐力', faction: '矮人' },
+      { text: '智慧与应变', faction: '人类' },
+      { text: '野性与本能', faction: '异人' },
+    ]},
+    { q: '周末你更可能做什么？', options: [
+      { text: '独自远行', faction: '精灵' },
+      { text: '打磨手艺', faction: '矮人' },
+      { text: '泡图书馆', faction: '人类' },
+      { text: '在野外奔跑', faction: '异人' },
+    ]},
+    { q: '你最看重什么？', options: [
+      { text: '自由', faction: '精灵' },
+      { text: '忠诚', faction: '矮人' },
+      { text: '求知', faction: '人类' },
+      { text: '生存', faction: '异人' },
+    ]},
+    { q: '对待陌生人的态度？', options: [
+      { text: '观察后再接近', faction: '精灵' },
+      { text: '保持警惕但可合作', faction: '矮人' },
+      { text: '先交流了解', faction: '人类' },
+      { text: '凭本能决定', faction: '异人' },
+    ]},
+  ],
+  '240号航线': [
+    { q: '当你看见钱，你会做什么？', options: [
+      { text: '交给警察', faction: '240-1' },
+      { text: '自己捡了', faction: '240' },
+      { text: '无视', faction: '246' },
+    ]},
+    { q: '你经常违规吗？', options: [
+      { text: '经常', faction: '240' },
+      { text: '偶尔', faction: '240-1' },
+      { text: '很少', faction: '246' },
+    ]},
+    { q: '你乐于尝试新事物吗？', options: [
+      { text: '我喜欢创新', faction: '240' },
+      { text: '一般', faction: '240-1' },
+      { text: '我恐惧新事物', faction: '246' },
+    ]},
+    { q: '如果下一秒你会死，你会怎么做？', options: [
+      { text: '我不想死', faction: '240-1' },
+      { text: '哦', faction: '240' },
+      { text: '再活一次', faction: '246' },
+    ]},
+    { q: '你更相信什么？', options: [
+      { text: '自己', faction: '240' },
+      { text: '规则', faction: '246' },
+      { text: '同伴', faction: '240-1' },
+    ]},
+  ]
+};
+
+// 洗牌
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let quizState = null;
+let factionChangeMode = false;
 // ===== 位置数据 =====
 const LOCATIONS = {
   '417号航线': ['绿林', '荒芜地', '红叶镇', '石地', '白地', '洞穴', '山地'],
@@ -312,9 +393,163 @@ function closeAuthModal() {
   if (m) m.style.display = 'none';
 }
 
-function openFactionModal() {
+function openFactionModal(isChange = false) {
   const m = document.getElementById('faction-modal');
-  if (m) m.style.display = 'flex';
+  if (!m) {
+    showToast('页面未加载弹窗，请刷新');
+    return;
+  }
+  factionChangeMode = !!isChange;
+  m.innerHTML = '<div id="faction-modal-content" style="background:#fff;padding:24px;border-radius:12px;width:90%;max-width:520px;max-height:85vh;overflow-y:auto;box-sizing:border-box;"></div>';
+  m.style.display = 'flex';
+  renderRouteSelection();
+}
+
+function renderRouteSelection() {
+  const c = document.getElementById('faction-modal-content');
+  if (!c) return;
+  c.innerHTML = `
+    <h2 style="margin-bottom:10px;color:var(--primary-dark);">${factionChangeMode ? '重新选择航线' : '选择你的航线'}</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.7;">
+      两条航线，两种人生。<br>
+      选定后 3 个月内不可更改。
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn" onclick="startQuiz('417号航线')" style="padding:16px;font-size:15px;text-align:left;">
+        <b>417号航线</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">奇幻大陆 · 精灵 / 矮人 / 人类 / 异人</div>
+      </button>
+      <button class="btn" onclick="startQuiz('240号航线')" style="padding:16px;font-size:15px;text-align:left;">
+        <b>240号航线</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">现实社会 · 240 / 246 / 240-1</div>
+      </button>
+      <button class="btn" disabled style="padding:16px;font-size:15px;text-align:left;opacity:0.4;cursor:not-allowed;">
+        <b>327号航线</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">未开放</div>
+      </button>
+      <button class="btn" disabled style="padding:16px;font-size:15px;text-align:left;opacity:0.4;cursor:not-allowed;">
+        <b>493号航线</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">未开放</div>
+      </button>
+      <button class="btn" disabled style="padding:16px;font-size:15px;text-align:left;opacity:0.4;cursor:not-allowed;">
+        <b>361号航线</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">未开放</div>
+      </button>
+    </div>
+  `;
+}
+
+function startQuiz(route) {
+  const questions = QUIZ_DATA[route];
+  if (!questions) return showToast('该航线暂未开放');
+  quizState = {
+    route: route,
+    questions: questions.map(q => ({
+      q: q.q,
+      options: shuffle([...q.options])
+    })),
+    current: 0,
+    scores: {}
+  };
+  renderQuizQuestion();
+}
+
+function renderQuizQuestion() {
+  const c = document.getElementById('faction-modal-content');
+  if (!c || !quizState) return;
+  const { questions, current } = quizState;
+  if (current >= questions.length) {
+    renderQuizResult();
+    return;
+  }
+  const q = questions[current];
+  c.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${quizState.route} · 第 ${current + 1} / ${questions.length} 题</div>
+    <h3 style="margin-bottom:18px;font-size:17px;line-height:1.5;">${q.q}</h3>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${q.options.map((o, i) => `
+        <button class="btn" onclick="answerQuestion(${i})" style="padding:14px;font-size:14px;text-align:left;">${o.text}</button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function answerQuestion(optionIndex) {
+  const q = quizState.questions[quizState.current];
+  const opt = q.options[optionIndex];
+  quizState.scores[opt.faction] = (quizState.scores[opt.faction] || 0) + 3;
+  quizState.current++;
+  renderQuizQuestion();
+}
+
+function renderQuizResult() {
+  const c = document.getElementById('faction-modal-content');
+  if (!c) return;
+  const scores = quizState.scores;
+  const maxScore = Math.max(...Object.values(scores));
+  const recommended = Object.keys(scores).filter(k => scores[k] === maxScore);
+
+  c.innerHTML = `
+    <h2 style="margin-bottom:10px;color:var(--primary-dark);">你的归属</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.7;">
+      基于你的回答，我们为你推荐以下身份：
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${recommended.map(f => `
+        <button class="btn btn-primary" onclick="finalizeFaction('${f}')" style="padding:16px;font-size:15px;text-align:left;">
+          <span style="font-size:18px;margin-right:8px;">${factionIcon(f)}</span>
+          <b>${f}</b> · ${factionTitle(f)}
+        </button>
+      `).join('')}
+      <button class="btn" onclick="renderRouteSelection()" style="margin-top:8px;">返回重选航线</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:16px;line-height:1.7;">
+      如果你不想接受推荐，可以返回重做测试。
+    </p>
+  `;
+}
+
+async function finalizeFaction(faction) {
+  if (!currentUser) return;
+  let username;
+
+  if (factionChangeMode && currentProfile) {
+    const ok = confirm('重新选择身份将清空你之前阵营的全部任务进度与特殊声望，确定吗？');
+    if (!ok) return;
+    username = currentProfile.username || '旅者';
+  } else {
+    username = prompt('请输入你的昵称：') || '';
+    if (!username.trim()) return showToast('昵称不能为空');
+    if (username.length > 20) return showToast('昵称最多 20 字');
+    if (await containsSensitiveWord(username)) return showToast('昵称包含敏感词');
+    if (containsLink(username)) return showToast('昵称不允许包含外链');
+  }
+
+  if (factionChangeMode && currentProfile) {
+    const { error } = await db.from('profiles').update({
+      faction: faction,
+      route: quizState.route,
+      faction_chosen_at: new Date().toISOString()
+    }).eq('id', currentUser.id);
+    if (error) return showToast('保存失败：' + error.message);
+    showToast('你已加入 ' + faction);
+  } else {
+    const { error } = await db.from('profiles').insert({
+      id: currentUser.id,
+      username: username.trim(),
+      faction: faction,
+      route: quizState.route,
+      faction_chosen_at: new Date().toISOString()
+    });
+    if (error) return showToast('保存失败：' + error.message);
+    showToast('欢迎来到 ' + faction);
+  }
+
+  const m = document.getElementById('faction-modal');
+  if (m) m.style.display = 'none';
+  quizState = null;
+  factionChangeMode = false;
+  await checkUser();
 }
 
 function showBannedScreen() {
@@ -383,18 +618,6 @@ async function handleRegister() {
 async function handleLogout() {
   await db.auth.signOut(); currentUser = null; currentProfile = null;
   showToast('你离开了 TALK'); updateUIForLoggedOut(); location.reload();
-}
-async function chooseFaction(faction) {
-  if (!currentUser) return;
-  const username = prompt('请输入你的昵称：') || '新用户';
-  const { error } = await db.from('profiles').insert({
-    id: currentUser.id,
-    username: username,
-    faction: faction,
-    faction_chosen_at: new Date().toISOString()
-  });
-  if (error) return showToast('选阵营失败：' + error.message);
-  showToast('欢迎加入 ' + faction + ' 阵营！'); $('#faction-modal').style.display = 'none'; checkUser();
 }
 
 // ===== 5. 数据加载与渲染 =====
@@ -1393,41 +1616,7 @@ function showFactionCooldown() {
 function changeFaction() {
   const ok = confirm('重新选择阵营将清空你之前阵营的全部任务进度与特殊声望，确定要离开当前阵营吗？');
   if (!ok) return;
-
-  const root = document.getElementById('settings-app');
-  root.innerHTML = `
-    <div class="card" style="max-width:520px;margin:0 auto;">
-      <h3>重新选择阵营</h3>
-      <p style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.8;">
-        离开一个阵营，就回不去了。<br>
-        选定后 3 个月内不可再更改。
-      </p>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px;">
-        <button class="btn" onclick="confirmFactionChange('精灵')" style="padding:16px;font-size:16px;">🦌 精灵 · 旅人</button>
-        <button class="btn" onclick="confirmFactionChange('矮人')" style="padding:16px;font-size:16px;">⚒️ 矮人 · 锻造学徒</button>
-        <button class="btn" onclick="confirmFactionChange('人类')" style="padding:16px;font-size:16px;">⭐ 人类 · 见习法师</button>
-        <button class="btn" onclick="initSettings()" style="padding:12px;margin-top:12px;">取消</button>
-      </div>
-    </div>
-  `;
-}
-
-async function confirmFactionChange(faction) {
-  const ok = confirm('确定加入 ' + faction + ' 阵营吗？这是最后一次确认。');
-  if (!ok) return;
-
-  const { error } = await db.from('profiles').update({
-    faction: faction,
-    faction_chosen_at: new Date().toISOString()
-  }).eq('id', currentUser.id);
-  if (error) return showToast('修改失败：' + error.message);
-
-  currentProfile.faction = faction;
-  currentProfile.faction_chosen_at = new Date().toISOString();
-  showToast('你已加入 ' + faction + ' 阵营');
-  applyFactionTheme();
-  updateUIForLoggedIn();
-  setTimeout(() => initSettings(), 500);
+  openFactionModal(true);
 }
 
 function initLocationSelectors() {
