@@ -1015,7 +1015,7 @@ async function initProfile() {
             </div>
             <div style="font-size:14px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <span style="display:inline-flex;align-items:center;gap:4px;background:var(--primary-light);color:var(--primary-dark);padding:2px 10px;border-radius:999px;font-weight:600;font-size:13px;">
-                ${factionIcon(faction)} ${faction} · ${title}
+                ${factionIcon(faction)} ${currentProfile.route ? currentProfile.route + ' · ' : ''}${faction} · ${title}
               </span>
             </div>
           </div>
@@ -2279,7 +2279,7 @@ async function initUserProfileView() {
             <div style="font-size:20px;font-weight:800;">${username.replace(/</g,'&lt;')}</div>
             <div style="font-size:13px;color:var(--muted);margin-top:4px;">
               <span style="display:inline-flex;align-items:center;gap:4px;background:var(--primary-light);color:var(--primary-dark);padding:2px 10px;border-radius:999px;font-weight:600;font-size:12px;">
-                ${factionIcon(faction)} ${faction} · ${title}
+                ${factionIcon(faction)} ${profile.route ? profile.route + ' · ' : ''}${faction} · ${title}
               </span>
             </div>
           </div>
