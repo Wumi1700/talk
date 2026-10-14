@@ -365,26 +365,33 @@ function avatarHTML(char, size = '') {
 }
 
 // ===== 4. 认证相关 =====
+let _checkUserPromise = null;
 async function checkUser() {
-  const { data: { user } } = await db.auth.getUser();
-  currentUser = user;
-  if (user) {
-    const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
-    currentProfile = profile;
-    if (!profile) {
-      openFactionModal();
-    } else if (profile.is_banned) {
-      showBannedScreen();
-      applyFactionTheme();
-      return;
+  if (_checkUserPromise) return _checkUserPromise;
+  _checkUserPromise = (async () => {
+    const { data: { user } } = await db.auth.getUser();
+    currentUser = user;
+    if (user) {
+      const { data: profile } = await db.from('profiles').select('*').eq('id', user.id).single();
+      currentProfile = profile;
+      if (!profile) {
+        openFactionModal();
+      } else if (profile.is_banned) {
+        showBannedScreen();
+        applyFactionTheme();
+        return;
+      } else {
+        updateUIForLoggedIn();
+      }
     } else {
-      updateUIForLoggedIn();
+      updateUIForLoggedOut();
     }
-  } else {
-    updateUIForLoggedOut();
-  }
-  applyFactionTheme();
-  if (typeof renderSidebar === 'function') await renderSidebar();
+    applyFactionTheme();
+    if (typeof renderSidebar === 'function') await renderSidebar();
+  })();
+  const r = await _checkUserPromise;
+  _checkUserPromise = null;
+  return r;
 }
 
 function updateUIForLoggedIn() {
@@ -1977,18 +1984,12 @@ async function deleteAccount() {
 }
 
 // ===== 13. 全站侧边栏自动生成 =====
+let SIDEBAR_RENDERED = false;
 async function renderSidebar() {
   const sidebar = document.querySelector('.sidebar-left');
   if (!sidebar) return;
-
-  // 【新增】打开任何页面时，检测角色新回复，自动生成通知
-  if (currentUser) {
-    await checkNewReplies();
-  }
-
   const path = location.pathname.split('/').pop() || 'index.html';
 
-  // 查询未读数
   let unread = 0;
   if (currentUser) {
     unread = await getUnreadCount();
@@ -2006,14 +2007,14 @@ async function renderSidebar() {
   sidebar.innerHTML = `
     <nav>
       ${links.map(l => `
-        <a href="${l.href}" 
-           ${l.alert ? `onclick="showToast('${l.alert}');return false;"` : ''} 
-           class="${path === l.href ? 'active' : ''}">
+        <a href="${l.href}" class="${path === l.href ? 'active' : ''}">
           <span class="icon">${l.icon}</span> ${l.text}
           ${l.badge ? `<span class="unread-badge" style="margin-left:auto;background:#E76F51;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;">${l.badge}</span>` : ''}
+        </a>
       `).join('')}
     </nav>
   `;
+  SIDEBAR_RENDERED = true;
 }
 
 // ===== 未读红点自动更新 =====
@@ -2045,41 +2046,32 @@ setInterval(() => {
   }
 }, 30000);
 
-// 【新增】检测角色新回复，自动生成通知
+let CHECKING_REPLIES = false;
 async function checkNewReplies() {
-  if (!currentUser) return;
-  // 找出所有“角色发来的、还没通知过的”消息
-  const { data: newMsgs } = await db.from('messages')
-    .select('id, character_id, content')
-    .eq('user_id', currentUser.id)
-    .eq('is_from_character', true)
-    .eq('notified', false);
+  if (!currentUser || CHECKING_REPLIES) return;
+  CHECKING_REPLIES = true;
+  try {
+    const { data: newMsgs } = await db.from('messages')
+      .select('id, character_id, content')
+      .eq('user_id', currentUser.id)
+      .eq('is_from_character', true)
+      .eq('notified', false);
 
-  if (!newMsgs || !newMsgs.length) return;
+    if (!newMsgs || !newMsgs.length) return;
 
-  // 对每条消息，生成一条通知
-  for (const m of newMsgs) {
-    await db.from('notifications').insert({
-      user_id: currentUser.id,
-      type: 'message',
-      target_id: '角色 ' + m.character_id + ' 回复了你：' + m.content.slice(0, 30),
-      is_read: false
-    });
-    await db.from('messages').update({ notified: true }).eq('id', m.id);
+    for (const m of newMsgs) {
+      await db.from('notifications').insert({
+        user_id: currentUser.id,
+        type: 'message',
+        target_id: '角色 ' + m.character_id + ' 回复了你：' + m.content.slice(0, 30),
+        is_read: false
+      });
+      await db.from('messages').update({ notified: true }).eq('id', m.id);
+    }
+  } finally {
+    CHECKING_REPLIES = false;
   }
 }
-
-// 页面加载时自动执行
-document.addEventListener('DOMContentLoaded', async () => {
-  await checkUser();
-  await renderSidebar();
-  bindSearchBox();
-  if (currentUser) {
-    await checkNewReplies();
-    await renderSidebar();
-    await updateUnreadBadge();
-  } 
-});
 
 // ===== 14. 通知中心 =====
 function notifyText(type) {
