@@ -357,17 +357,184 @@ async function ignoreReport(reportId) {
   renderReports();
 }
 
-// ===== 用户管理（暂占位）=====
+// ===== 用户管理 =====
 async function renderUsers() {
-  $('#admin-app').innerHTML = `
-    <div class="card"><h3>用户管理</h3><div class="empty" style="margin-top:12px;">下一批做。</div></div>
+  const root = $('#admin-app');
+  root.innerHTML = `
+    <div class="card">
+      <h3>用户管理</h3>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <input id="user-search" type="text" placeholder="搜索昵称…" style="flex:1;min-width:180px;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <button class="btn btn-primary" onclick="searchUsers()">搜索</button>
+        <button class="btn" onclick="loadRecentUsers()">显示最近</button>
+      </div>
+    </div>
+    <div id="user-list"></div>
+  `;
+  await loadRecentUsers();
+}
+
+async function loadRecentUsers() {
+  const list = $('#user-list');
+  list.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">加载中…</div>';
+  const { data, error } = await db.from('profiles')
+    .select('id, username, faction, route, is_banned, created_at')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) { list.innerHTML = '<div class="empty">加载失败：' + esc(error.message) + '</div>'; return; }
+  renderUserList(data || [], '最近 50 个用户');
+}
+
+async function searchUsers() {
+  const q = $('#user-search').value.trim();
+  if (!q) return loadRecentUsers();
+  const list = $('#user-list');
+  list.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">搜索中…</div>';
+  const { data, error } = await db.from('profiles')
+    .select('id, username, faction, route, is_banned, created_at')
+    .ilike('username', '%' + q + '%')
+    .limit(50);
+  if (error) { list.innerHTML = '<div class="empty">搜索失败：' + esc(error.message) + '</div>'; return; }
+  renderUserList(data || [], '搜索「' + q + '」找到 ' + (data || []).length + ' 个');
+}
+
+function renderUserList(users, title) {
+  const list = $('#user-list');
+  if (!users.length) {
+    list.innerHTML = `<div class="card"><div style="font-size:13px;color:var(--muted);">${esc(title)}</div><div class="empty" style="margin-top:8px;">没有用户</div></div>`;
+    return;
+  }
+  list.innerHTML = `
+    <div class="card" style="padding:10px 16px;"><div style="font-size:13px;color:var(--muted);">${esc(title)}</div></div>
+    ${users.map(u => {
+      const initial = (u.username || '?').slice(0, 1);
+      const fac = u.faction ? factionIcon(u.faction) + ' ' : '';
+      return `
+        <div class="card" style="display:flex;align-items:center;gap:12px;">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc(initial)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:14px;">
+              ${esc(u.username || '未命名')}
+              ${u.is_banned ? '<span style="font-size:11px;background:#f5c2c7;color:#b02a37;padding:1px 6px;border-radius:10px;margin-left:6px;">已封禁</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+              ${fac}${esc(u.route || '')} · 注册于 ${new Date(u.created_at).toLocaleDateString('zh-CN')}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="showUserDetail('${u.id}')">详情</button>
+            ${u.is_banned
+              ? `<button class="btn" style="font-size:12px;padding:4px 10px;" onclick="toggleUserBan('${u.id}', false)">解封</button>`
+              : `<button class="btn" style="font-size:12px;padding:4px 10px;border-color:#dc3545;color:#dc3545;" onclick="toggleUserBan('${u.id}', true)">封禁</button>`}
+          </div>
+        </div>
+      `;
+    }).join('')}
   `;
 }
 
-// ===== 数据看板（暂占位）=====
+async function toggleUserBan(userId, banned) {
+  const action = banned ? '封禁' : '解封';
+  if (!confirm('确定要' + action + '该用户吗？')) return;
+  const { error } = await db.from('profiles').update({ is_banned: banned }).eq('id', userId);
+  if (error) return showToast(action + '失败：' + error.message);
+  showToast('已' + action);
+  const q = $('#user-search') ? $('#user-search').value.trim() : '';
+  if (q) searchUsers(); else loadRecentUsers();
+}
+
+async function showUserDetail(userId) {
+  const { data: p } = await db.from('profiles').select('id, username, faction, route, bio, location, is_banned, created_at').eq('id', userId).single();
+  if (!p) return showToast('用户不存在');
+
+  const [comments, messages, follows, bookmarks] = await Promise.all([
+    db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    db.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    db.from('follows').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    db.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+  ]);
+
+  const detail = document.createElement('div');
+  detail.id = 'user-detail-modal';
+  detail.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+  detail.innerHTML = `
+    <div style="background:#fff;padding:24px;border-radius:12px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;">
+      <h3 style="margin-bottom:16px;">用户详情</h3>
+      <div style="font-size:14px;line-height:2;">
+        <div><b>昵称：</b>${esc(p.username || '未命名')}</div>
+        <div><b>阵营：</b>${p.faction ? factionIcon(p.faction) + ' ' + esc(p.faction) : '中立'}</div>
+        <div><b>航线：</b>${esc(p.route || '未选')}</div>
+        <div><b>驻地：</b>${esc(p.location || '未填')}</div>
+        <div><b>简介：</b>${esc(p.bio || '未填')}</div>
+        <div><b>注册：</b>${new Date(p.created_at).toLocaleString('zh-CN')}</div>
+        <div><b>状态：</b>${p.is_banned ? '<span style="color:#dc3545;">已封禁</span>' : '正常'}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:16px;">
+        <div class="card" style="margin:0;text-align:center;padding:10px;"><div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${comments.count || 0}</div><div style="font-size:12px;color:var(--muted);">评论</div></div>
+        <div class="card" style="margin:0;text-align:center;padding:10px;"><div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${messages.count || 0}</div><div style="font-size:12px;color:var(--muted);">私信</div></div>
+        <div class="card" style="margin:0;text-align:center;padding:10px;"><div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${follows.count || 0}</div><div style="font-size:12px;color:var(--muted);">关注角色</div></div>
+        <div class="card" style="margin:0;text-align:center;padding:10px;"><div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${bookmarks.count || 0}</div><div style="font-size:12px;color:var(--muted);">赞同</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:20px;">
+        ${p.is_banned
+          ? `<button class="btn" style="flex:1;" onclick="toggleUserBan('${p.id}', false);document.getElementById('user-detail-modal').remove();">解封</button>`
+          : `<button class="btn" style="flex:1;border-color:#dc3545;color:#dc3545;" onclick="toggleUserBan('${p.id}', true);document.getElementById('user-detail-modal').remove();">封禁</button>`}
+        <button class="btn" style="flex:1;" onclick="document.getElementById('user-detail-modal').remove()">关闭</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(detail);
+}
+
+// ===== 数据看板 =====
 async function renderStats() {
-  $('#admin-app').innerHTML = `
-    <div class="card"><h3>数据看板</h3><div class="empty" style="margin-top:12px;">下一批做。</div></div>
+  const root = $('#admin-app');
+  root.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">加载中…</div>';
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayISO = today.toISOString();
+
+  const [
+    totalUsers, totalComments, totalMessages, totalFollows,
+    todayUsers, todayComments, todayMessages, todayFollows, todayLikes, todayBookmarks
+  ] = await Promise.all([
+    db.from('profiles').select('*', { count: 'exact', head: true }),
+    db.from('comments').select('*', { count: 'exact', head: true }),
+    db.from('messages').select('*', { count: 'exact', head: true }),
+    db.from('follows').select('*', { count: 'exact', head: true }),
+    db.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+    db.from('comments').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+    db.from('messages').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+    db.from('follows').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+    db.from('likes').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+    db.from('bookmarks').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+  ]);
+
+  const big = (label, n, icon) => `
+    <div class="card" style="margin:0;padding:16px;">
+      <div style="font-size:22px;margin-bottom:6px;">${icon}</div>
+      <div style="font-size:28px;font-weight:800;color:var(--primary-dark);">${n}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">${label}</div>
+    </div>
+  `;
+
+  root.innerHTML = `
+    <div class="card"><h3>数据看板</h3><p style="font-size:13px;color:var(--muted);margin-top:6px;">总共</p></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;">
+      ${big('用户', totalUsers.count || 0, '👥')}
+      ${big('评论', totalComments.count || 0, '💬')}
+      ${big('私信', totalMessages.count || 0, '✉️')}
+      ${big('关注', totalFollows.count || 0, '⭐')}
+    </div>
+    <div class="card" style="margin-top:16px;"><h3>今日</h3></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;">
+      ${big('新用户', todayUsers.count || 0, '🆕')}
+      ${big('新评论', todayComments.count || 0, '💬')}
+      ${big('新私信', todayMessages.count || 0, '✉️')}
+      ${big('新关注', todayFollows.count || 0, '⭐')}
+      ${big('新点赞', todayLikes.count || 0, '♥')}
+      ${big('新赞同', todayBookmarks.count || 0, '🔖')}
+    </div>
   `;
 }
 
