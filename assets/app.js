@@ -2054,19 +2054,82 @@ async function markRead(id) {
   await renderSidebar();
 }
 
+// ===== 节日系统 =====
+let EVENTS = [];
+
+async function loadEvents() {
+  if (EVENTS.length) return EVENTS;
+  try {
+    const res = await fetch('data/events.json');
+    const data = await res.json();
+    EVENTS = data.events || [];
+  } catch (e) {
+    EVENTS = [];
+  }
+  return EVENTS;
+}
+
+function getActiveEvents() {
+  if (!EVENTS.length) return [];
+  const now = new Date();
+  const year = now.getFullYear();
+  const today = new Date(year, now.getMonth(), now.getDate());
+  const active = [];
+  for (const ev of EVENTS) {
+    const [mm, dd] = ev.date.split('-').map(Number);
+    const evDate = new Date(year, mm - 1, dd);
+    const diffDays = Math.floor((today - evDate) / 86400000);
+    if (diffDays >= 0 && diffDays < (ev.days || 3)) {
+      active.push({ ...ev, daysSince: diffDays, isToday: diffDays === 0 });
+    }
+  }
+  return active;
+}
+
+function filterEventsByFaction(events, faction) {
+  if (!faction) return events;
+  return events.filter(ev => (ev.factions || []).includes(faction));
+}
+
+function renderEventBanner(events) {
+  if (!events.length) return '';
+  return events.map(ev => `
+    <div style="margin-bottom:16px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-light) 100%);padding:20px;">
+      <div style="font-size:11px;letter-spacing:2px;color:var(--primary-dark);font-weight:600;margin-bottom:6px;">
+        ${ev.route} · ${ev.isToday ? '今日节日' : '节日进行中'}
+      </div>
+      <div style="font-size:22px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.15);margin-bottom:8px;">
+        🎉 ${ev.name}
+      </div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.95);line-height:1.6;">
+        ${ev.desc}
+      </div>
+    </div>
+  `).join('');
+}
+
 // ===== 15. 阵营论坛 =====
 let FORUM_POSTS = [];
 
 async function loadForumData() {
   try {
+    await loadEvents();
     const res = await fetch('posts/forum.json');
     const data = await res.json();
-    FORUM_POSTS = await Promise.all(data.posts.map(async p => {
+    const allPosts = await Promise.all(data.posts.map(async p => {
       const r = await fetch(p.file);
       const text = await r.text();
       const { data: fm, content } = parseFrontMatter(text);
       return { id: p.id, ...fm, content };
     }));
+
+    // 过滤：有 event 字段的帖子，只在该节日进行中才显示
+    const activeEvents = getActiveEvents();
+    const activeNames = activeEvents.map(e => e.name);
+    FORUM_POSTS = allPosts.filter(p => {
+      if (!p.event) return true;
+      return activeNames.includes(p.event);
+    });
   } catch (e) {
     FORUM_POSTS = [];
   }
@@ -2094,12 +2157,16 @@ async function initForum() {
   const viewingFaction = params.get('faction') || myFaction;
   const isOwn = viewingFaction === myFaction;
 
-  // 关键：设置只读标记，renderPostCard 会读它
   forumReadOnly = !isOwn;
 
   const posts = FORUM_POSTS.filter(p => p.faction === viewingFaction);
 
-  const topBanner = `
+  // 节日横幅：只显示自己身份能看到的节日
+  const activeEvents = getActiveEvents();
+  const myEvents = filterEventsByFaction(activeEvents, myFaction);
+  const eventBanner = renderEventBanner(myEvents);
+
+  const topBanner = eventBanner + `
     <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
       <h3>${factionIcon(viewingFaction)} ${viewingFaction} · 论坛 ${isOwn ? '' : '<span style="font-size:12px;color:var(--text-muted);font-weight:400;">（仅浏览）</span>'}</h3>
       <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">
@@ -2114,7 +2181,7 @@ async function initForum() {
 
   root.innerHTML = topBanner + postsHTML;
 
-  // 右侧栏：阵营入口
+  // 右侧栏：论坛列表
   if (sidebarRight) {
     const allFactions = ['精灵', '矮人', '人类', '异人', '240', '246', '240-1'];
     const others = allFactions.filter(f => f !== myFaction);
@@ -2145,7 +2212,6 @@ async function initForum() {
     `;
   }
 
-  // 离开页面时复位，防止影响其他页面
   window.addEventListener('beforeunload', () => { forumReadOnly = false; });
 }
 
