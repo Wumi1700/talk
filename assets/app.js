@@ -371,7 +371,7 @@ function updateUIForLoggedIn() {
     actions.style.gap = '10px';
     actions.innerHTML = `
       ${userAvatarHTML(currentProfile, 28)}
-      <span style="font-size:14px;font-weight:600;">${factionIcon(currentProfile.faction)} [${currentProfile.faction}] ${currentProfile.username || '用户'}</span>
+      <span style="font-size:14px;font-weight:600;">${currentProfile.faction ? factionIcon(currentProfile.faction) + ' [' + currentProfile.faction + '] ' : ''}${currentProfile.username || '用户'}</span>
       <button class="btn" onclick="handleLogout()">退出</button>
     `;
   }
@@ -683,7 +683,7 @@ async function renderPostCard(post, isDetail = false) {
       <div class="post-header">
         ${avatarHTML(char)}
         <div class="post-meta">
-          <div class="post-name"><a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
+          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
           <div class="post-sub">@${char.handle} · ${relativeTime(post.date)}${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
@@ -1412,7 +1412,7 @@ async function initCharacter() {
       <div class="profile-bio">${char.bio || ''}</div>
       <div class="profile-info">
         <span>📍 ${char.location || ''}</span>
-        <span>阵营：${char.faction || '中立'}</span>
+        ${char.faction ? `<span>阵营：${factionIcon(char.faction)} ${char.faction}</span>` : `<span>身份：中立</span>`}
         <span><b id="follower-count">${totalFollowers}</b> 粉丝</span>
         <span><b>${char.following || 0}</b> 关注</span>
       </div>
