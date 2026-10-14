@@ -301,6 +301,29 @@ function openCropperDialog(file, bucket, maxW, maxH, maxKB, field, aspectRatio) 
     })();
   };
 }
+
+// ===== 随机加载提示 =====
+const LOADING_TIPS = [
+  '找钥匙中🔑…',
+  '正在翻页…',
+  '连接航线中…',
+  '太五日报正在印刷📰…',
+  '旅者，稍等…',
+  '轨道正在对齐…',
+  '世界意志正在回应…',
+  '正在整理档案…',
+  '航线正在接通…',
+  '正在唤醒角色…',
+];
+
+function renderLoadingHTML() {
+  const tip = LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)];
+  return `<div class="empty" style="padding:80px 20px;text-align:center;color:var(--muted);font-size:14px;letter-spacing:1px;">
+    <div style="font-size:24px;margin-bottom:12px;">📡</div>
+    ${tip}
+  </div>`;
+}
+
 function showToast(msg) {
   let t = $('#toast');
   if (!t) { t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
@@ -2869,3 +2892,15 @@ async function initUserProfileView() {
     });
   });
 }
+
+// ===== 自动注入加载提示 =====
+document.addEventListener('DOMContentLoaded', () => {
+  const mainEl = document.querySelector('main');
+  if (mainEl) {
+    const text = mainEl.textContent.trim();
+    // 只有当前是"加载中…"这种占位文字时才替换
+    if (!text || text.includes('加载中')) {
+      mainEl.innerHTML = renderLoadingHTML();
+    }
+  }
+});
