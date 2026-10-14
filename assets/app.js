@@ -1402,15 +1402,15 @@ async function initHome() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
+  await loadAds();
+  await loadHotsearch();
 
-  // 查询当前用户关注了哪些角色
   let followedChars = [];
   if (currentUser) {
     const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
     followedChars = (follows || []).map(f => f.character_id);
   }
 
-  // 排序：已关注角色的帖子优先，其他按时间倒序
   const sortedPosts = [...POSTS].sort((a, b) => {
     const aF = followedChars.includes(a.character) ? 1 : 0;
     const bF = followedChars.includes(b.character) ? 1 : 0;
@@ -1419,20 +1419,40 @@ async function initHome() {
   });
 
   const feed = $('#feed');
-  if (!sortedPosts.length) { feed.innerHTML = '<div class="empty">还没有动态</div>'; return; }
-  const html = await Promise.all(sortedPosts.map(renderPostCard));
-  feed.innerHTML = html.join('');
+  if (!sortedPosts.length) {
+    feed.innerHTML = '<div class="empty">还没有动态</div>';
+  } else {
+    const parts = [];
+    for (let i = 0; i < sortedPosts.length; i++) {
+      parts.push(await renderPostCard(sortedPosts[i]));
+      // 每 3 条帖子里插一个广告
+      if ((i + 1) % 3 === 0) {
+        parts.push(renderAdCard());
+      }
+    }
+    feed.innerHTML = parts.join('');
+  }
 
-  const rec = $('#recommend');
-  if (rec) {
-    rec.innerHTML = Object.values(CHARACTERS).map(c => `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        ${avatarHTML(c)}
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:14px"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
-          <div style="font-size:12px;color:var(--text-muted)">@${c.handle}</div>
+  // 右侧栏：热搜 + 推荐角色
+  const sidebarRight = document.querySelector('.sidebar-right');
+  if (sidebarRight) {
+    sidebarRight.innerHTML = `
+      ${renderHotsearchCard()}
+      <div class="card">
+        <h3>推荐角色</h3>
+        <div id="recommend">
+          ${Object.values(CHARACTERS).map(c => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              ${avatarHTML(c)}
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:14px"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
+                <div style="font-size:12px;color:var(--text-muted)">@${c.handle}</div>
+              </div>
+            </div>
+          `).join('')}
         </div>
-      </div>`).join('');
+      </div>
+    `;
   }
 }
 
@@ -2052,6 +2072,87 @@ async function markRead(id) {
   await db.from('notifications').update({ is_read: true }).eq('id', id);
   await initNotifications();
   await renderSidebar();
+}
+
+// ===== 广告系统 =====
+let ADS = [];
+
+async function loadAds() {
+  if (ADS.length) return ADS;
+  try {
+    const res = await fetch('data/ads.json');
+    const data = await res.json();
+    ADS = data.ads || [];
+  } catch (e) {
+    ADS = [];
+  }
+  return ADS;
+}
+
+function renderAdCard() {
+  if (!ADS.length) return '';
+  const ad = ADS[Math.floor(Math.random() * ADS.length)];
+  return `
+    <div onclick="location.href='${ad.url}'" style="cursor:pointer;padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(to right, rgba(0,0,0,0.02), rgba(0,0,0,0.04));transition:background 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.06)'" onmouseout="this.style.background='linear-gradient(to right, rgba(0,0,0,0.02), rgba(0,0,0,0.04))'">
+      <div style="font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:6px;">📢 广告</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);">${ad.title}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px;">${ad.content}</div>
+    </div>
+  `;
+}
+
+// ===== 热搜系统 =====
+let HOTSEARCH = { byFaction: {} };
+
+async function loadHotsearch() {
+  try {
+    const res = await fetch('data/hotsearch.json');
+    HOTSEARCH = await res.json();
+  } catch (e) {
+    HOTSEARCH = { byFaction: {} };
+  }
+}
+
+function getHotsearchFor(faction) {
+  if (!faction || !HOTSEARCH.byFaction) return [];
+  // 246 和 240-1 共享 240 的热搜
+  if (faction === '246' || faction === '240-1') {
+    return HOTSEARCH.byFaction['240'] || [];
+  }
+  return HOTSEARCH.byFaction[faction] || [];
+}
+
+function renderHotsearchCard() {
+  if (!currentProfile || !currentProfile.faction) {
+    return `
+      <div class="card">
+        <h3>🔥 热搜</h3>
+        <div style="font-size:13px;color:var(--muted);margin-top:8px;">登录后查看</div>
+      </div>
+    `;
+  }
+  const list = getHotsearchFor(currentProfile.faction);
+  if (!list.length) {
+    return `
+      <div class="card">
+        <h3>🔥 热搜</h3>
+        <div style="font-size:13px;color:var(--muted);margin-top:8px;">暂无热搜</div>
+      </div>
+    `;
+  }
+  return `
+    <div class="card">
+      <h3>🔥 热搜</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+        ${list.slice(0, 3).map((item, i) => `
+          <a href="${item.url}" style="display:flex;gap:10px;text-decoration:none;color:var(--text);font-size:14px;line-height:1.5;">
+            <span style="color:${i === 0 ? '#E76F51' : 'var(--muted)'};font-weight:700;flex-shrink:0;">${i + 1}</span>
+            <span style="flex:1;">${item.text}</span>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 // ===== 节日系统 =====
