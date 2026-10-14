@@ -2,29 +2,29 @@
   "updated": "2026-10-14",
   "byFaction": {
     "精灵": [
-      { "text": "月影林春季采集开始", "url": "post.html?id=2026-09-24-001" },
-      { "text": "精灵主神殿修缮完成", "url": "post.html?id=2026-09-24-002" },
-      { "text": "月神图书馆新书上架", "url": "post.html?id=2026-09-24-003" }
+      { "text": "月影林春季采集开始", "url": "search.html?q=月影林" },
+      { "text": "精灵主神殿修缮完成", "url": "search.html?q=主神殿" },
+      { "text": "月神图书馆新书上架", "url": "search.html?q=月神图书馆" }
     ],
     "矮人": [
-      { "text": "铁炉堡锻造大赛倒计时", "url": "post.html?id=2026-09-24-001" },
-      { "text": "低地矿坑新矿脉发现", "url": "post.html?id=2026-09-24-002" },
-      { "text": "大锻炉工坊招学徒", "url": "post.html?id=2026-09-24-003" }
+      { "text": "铁炉堡锻造大赛倒计时", "url": "search.html?q=铁炉堡" },
+      { "text": "低地矿坑新矿脉发现", "url": "search.html?q=矿坑" },
+      { "text": "大锻炉工坊招学徒", "url": "search.html?q=大锻炉" }
     ],
     "人类": [
-      { "text": "王都图书馆开放夜读区", "url": "post.html?id=2026-09-24-001" },
-      { "text": "星辰魔法学院招生", "url": "post.html?id=2026-09-24-002" },
-      { "text": "王城东区新开集市", "url": "post.html?id=2026-09-24-003" }
+      { "text": "王都图书馆开放夜读区", "url": "search.html?q=王都" },
+      { "text": "星辰魔法学院招生", "url": "search.html?q=魔法学院" },
+      { "text": "王城东区新开集市", "url": "search.html?q=王城" }
     ],
     "异人": [
-      { "text": "祖灵夜祭典准备中", "url": "post.html?id=2026-09-24-001" },
-      { "text": "荒野深处发现遗迹", "url": "post.html?id=2026-09-24-002" },
-      { "text": "异人部落扩大领地", "url": "post.html?id=2026-09-24-003" }
+      { "text": "祖灵夜祭典准备中", "url": "search.html?q=祖灵" },
+      { "text": "荒野深处发现遗迹", "url": "search.html?q=荒野" },
+      { "text": "异人部落扩大领地", "url": "search.html?q=异人" }
     ],
     "240": [
-      { "text": "立法日倒计时", "url": "post.html?id=2026-10-14-ad-001" },
-      { "text": "港口区本周通行正常", "url": "post.html?id=2026-10-11-hotsearch-001" },
-      { "text": "市中心新开商业街", "url": "post.html?id=2026-10-11-tt-001" }
+      { "text": "立法日倒计时", "url": "search.html?q=立法日" },
+      { "text": "港口区本周通行正常", "url": "search.html?q=港口" },
+      { "text": "市中心新开商业街", "url": "search.html?q=商业街" }
     ]
   }
 }
