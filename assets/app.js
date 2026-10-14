@@ -755,14 +755,20 @@ async function loadData() {
 }
 
 async function loadPostStats() {
-  const uid = currentUser ? currentUser.id : '00000000-0000-0000-0000-000000000000';
-  const { data, error } = await db.rpc('get_posts_stats', { p_user_id: uid });
-  if (error) {
-    console.warn('批量查询失败，回退逐条查询', error);
-    POST_STATS = {};
-    return;
-  }
   POST_STATS = {};
+  POSTS.forEach(p => {
+    POST_STATS[p.id] = { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
+  });
+  if (typeof FORUM_POSTS !== 'undefined' && Array.isArray(FORUM_POSTS)) {
+    FORUM_POSTS.forEach(p => {
+      if (!POST_STATS[p.id]) {
+        POST_STATS[p.id] = { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
+      }
+    });
+  }
+  if (!currentUser) return;
+  const { data, error } = await db.rpc('get_posts_stats', { p_user_id: currentUser.id });
+  if (error) { console.warn('批量查询失败', error); return; }
   (data || []).forEach(row => {
     POST_STATS[row.post_id] = {
       like_count: Number(row.like_count) || 0,
