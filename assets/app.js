@@ -801,27 +801,13 @@ function openImageViewer(src) {
   document.body.appendChild(viewer);
 }
 
-async function renderPostCard(post, isDetail = false) {
+function renderPostCard(post, isDetail = false) {
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
   const tags = (post.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
   // 从缓存读，缓存没有就补一次查询
-  let stats = POST_STATS[post.id];
-  if (!stats) {
-    const uid = currentUser ? currentUser.id : null;
-    const { count: likeCount } = await db.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
-    const { count: commentCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id).eq('status', 'visible');
-    let isLiked = false, isBookmarked = false;
-    if (uid) {
-      const { data: la } = await db.from('likes').select('id').eq('post_id', post.id).eq('user_id', uid).limit(1);
-      isLiked = la && la.length > 0;
-      const { data: ba } = await db.from('bookmarks').select('id').eq('post_id', post.id).eq('user_id', uid).limit(1);
-      isBookmarked = ba && ba.length > 0;
-    }
-    stats = { like_count: likeCount || 0, comment_count: commentCount || 0, is_liked: isLiked, is_bookmarked: isBookmarked };
-    POST_STATS[post.id] = stats;
-  }
+  let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
 
   const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
 
@@ -857,12 +843,20 @@ async function toggleLike(postId, btn) {
   const heartSpan = btn.querySelector('.heart-icon');
   const isLiked = btn.classList.contains('liked');
   if (isLiked) {
-    await db.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    await db.from('likes').delete().
+    if (!POST_STATS[postId]) POST_STATS[postId] = { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
+    POST_STATS[postId].is_liked = true;
+    POST_STATS[postId].like_count++;
+    eq('post_id', postId).eq('user_id', currentUser.id);
     btn.classList.remove('liked');
     countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
     if (heartSpan) heartSpan.textContent = '♡';
   } else {
     await db.from('likes').insert({ post_id: postId, user_id: currentUser.id });
+    if (POST_STATS[postId]) {
+      POST_STATS[postId].is_liked = false;
+      POST_STATS[postId].like_count = Math.max(0, POST_STATS[postId].like_count - 1);
+    }
     btn.classList.add('liked');
     btn.style.animation = 'none';
     void btn.offsetWidth;
@@ -1339,6 +1333,7 @@ function renderAchievements(s) {
 async function initProfile() {
   await checkUser();
   await loadData();
+  await loadPostStats();
   const root = $('#user-profile');
   if (!currentUser || !currentProfile) {
     root.innerHTML = '<div class="empty">请先登录后再查看个人主页</div>';
@@ -1512,7 +1507,7 @@ async function initHome() {
   } else {
     const parts = [];
     for (let i = 0; i < sortedPosts.length; i++) {
-      parts.push(await renderPostCard(sortedPosts[i]));
+      parts.push(renderPostCard(sortedPosts[i]));
       // 每 3 条帖子里插一个广告
       if ((i + 1) % 3 === 0) {
         parts.push(renderAdCard());
@@ -1631,7 +1626,7 @@ async function initPost() {
 
   root.innerHTML = `
     <a href="index.html" style="font-size:14px">← 返回首页</a>
-    <div style="margin-top:16px">${await renderPostCard(post, true)}</div>
+    <div style="margin-top:16px">${renderPostCard(post, true)}</div>
     <div style="margin-top:16px;padding:44px 20px;text-align:center;background:var(--bg);border:2px dashed var(--border);border-radius:12px;color:var(--muted);font-size:14px;letter-spacing:2px;">
       📢 广告位招租
     </div>
@@ -2414,7 +2409,8 @@ async function initSearch() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
-
+  await loadPostStats();
+  
   const root = $('#search-app');
   const q = new URLSearchParams(location.search).get('q') || '';
 
@@ -2784,6 +2780,7 @@ async function deleteOwnComment(commentId, postId) {
 async function initUserProfileView() {
   await checkUser();
   await loadData();
+  await loadPostStats();
   const root = $('#user-profile-view');
   const userId = new URLSearchParams(location.search).get('id');
 
