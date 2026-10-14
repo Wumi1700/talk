@@ -546,11 +546,74 @@ async function finalizeFaction(faction) {
     showToast('欢迎来到 ' + faction);
   }
 
-  const m = document.getElementById('faction-modal');
-  if (m) m.style.display = 'none';
   quizState = null;
   factionChangeMode = false;
   await checkUser();
+
+  // 如果是老用户改阵营，直接关；新用户，弹推荐
+  if (factionChangeMode === false) {
+    await showRecommendedCharacters(faction);
+  } else {
+    const m = document.getElementById('faction-modal');
+    if (m) m.style.display = 'none';
+  }
+}
+
+async function showRecommendedCharacters(myFaction) {
+  const m = document.getElementById('faction-modal');
+  const c = document.getElementById('faction-modal-content');
+  if (!m || !c) return;
+
+  // 同阵营优先，不够用其他补
+  const all = Object.values(CHARACTERS).filter(ch => ch.faction);
+  const sameFaction = all.filter(ch => ch.faction === myFaction);
+  const others = all.filter(ch => ch.faction !== myFaction);
+  const recommended = [...sameFaction, ...others].slice(0, 3);
+
+  if (!recommended.length) {
+    m.style.display = 'none';
+    return;
+  }
+
+  c.innerHTML = `
+    <h2 style="margin-bottom:10px;color:var(--primary-dark);">为你推荐</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.7;">
+      这些角色和你在同一个世界。<br>
+      关注他们，以后会在首页优先看到他们的动态。
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${recommended.map(ch => `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;">
+          ${avatarHTML(ch)}
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;">
+              ${ch.faction ? factionIcon(ch.faction) + ' ' : ''}${ch.name}
+              ${ch.verified ? `<span class="verified">✓ ${ch.verified}</span>` : ''}
+            </div>
+            <div style="font-size:13px;color:var(--muted);">@${ch.handle} · ${ch.bio || ''}</div>
+          </div>
+          <button class="btn btn-primary follow-rec-btn" data-handle="${ch.handle}" onclick="followRecommended('${ch.handle}', this)">关注</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn" onclick="closeRecommended()" style="width:100%;margin-top:16px;">进入 TALK</button>
+  `;
+  m.style.display = 'flex';
+}
+
+async function followRecommended(handle, btn) {
+  if (!currentUser) return;
+  await db.from('follows').insert({ character_id: handle, user_id: currentUser.id });
+  btn.textContent = '已关注';
+  btn.classList.remove('btn-primary');
+  btn.classList.add('btn');
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+}
+
+function closeRecommended() {
+  const m = document.getElementById('faction-modal');
+  if (m) m.style.display = 'none';
 }
 
 function showBannedScreen() {
