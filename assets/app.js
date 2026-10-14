@@ -6,6 +6,7 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ===== 2. 全局变量 =====
 let forumReadOnly = false;
 let currentUser = null;
+let POST_STATS = {}; // post_id -> { like_count, comment_count, is_liked, is_bookmarked }
 let currentProfile = null;
 
 // ===== 3. 工具函数 =====
@@ -687,6 +688,22 @@ async function handleLogout() {
 // ===== 5. 数据加载与渲染 =====
 let CHARACTERS = {}, POSTS = [];
 async function loadData() {
+  // 用 sessionStorage 缓存，30 分钟有效
+  const CACHE_KEY = 'talk_data_cache_v1';
+  const CACHE_TTL = 30 * 60 * 1000;
+
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const obj = JSON.parse(cached);
+      if (Date.now() - obj.t < CACHE_TTL) {
+        CHARACTERS = obj.chars;
+        POSTS = obj.posts;
+        return;
+      }
+    }
+  } catch (e) {}
+
   const [cRes, pRes] = await Promise.all([fetch('data/characters.json'), fetch('posts/posts.json')]);
   CHARACTERS = await cRes.json();
   const list = (await pRes.json()).posts;
@@ -697,6 +714,33 @@ async function loadData() {
     return { id: p.id, ...data, content };
   }));
   POSTS.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+      t: Date.now(),
+      chars: CHARACTERS,
+      posts: POSTS
+    }));
+  } catch (e) {}
+}
+
+async function loadPostStats() {
+  const uid = currentUser ? currentUser.id : '00000000-0000-0000-0000-000000000000';
+  const { data, error } = await db.rpc('get_posts_stats', { p_user_id: uid });
+  if (error) {
+    console.warn('批量查询失败，回退逐条查询', error);
+    POST_STATS = {};
+    return;
+  }
+  POST_STATS = {};
+  (data || []).forEach(row => {
+    POST_STATS[row.post_id] = {
+      like_count: Number(row.like_count) || 0,
+      comment_count: Number(row.comment_count) || 0,
+      is_liked: row.is_liked,
+      is_bookmarked: row.is_bookmarked,
+    };
+  });
 }
 
 function renderPostImages(images) {
@@ -726,17 +770,24 @@ async function renderPostCard(post, isDetail = false) {
   const tags = (post.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
-  const { count: likeCount } = await db.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
-  const { count: commentCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id).eq('status', 'visible');
-
-  let isLiked = false;
-  let isBookmarked = false;
-  if (currentUser) {
-    const { data: likeDataArr } = await db.from('likes').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).limit(1);
-    isLiked = likeDataArr && likeDataArr.length > 0;
-    const { data: bkDataArr } = await db.from('bookmarks').select('id').eq('post_id', post.id).eq('user_id', currentUser.id).limit(1);
-    isBookmarked = bkDataArr && bkDataArr.length > 0;
+  // 从缓存读，缓存没有就补一次查询
+  let stats = POST_STATS[post.id];
+  if (!stats) {
+    const uid = currentUser ? currentUser.id : null;
+    const { count: likeCount } = await db.from('likes').select('*', { count: 'exact', head: true }).eq('post_id', post.id);
+    const { count: commentCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id).eq('status', 'visible');
+    let isLiked = false, isBookmarked = false;
+    if (uid) {
+      const { data: la } = await db.from('likes').select('id').eq('post_id', post.id).eq('user_id', uid).limit(1);
+      isLiked = la && la.length > 0;
+      const { data: ba } = await db.from('bookmarks').select('id').eq('post_id', post.id).eq('user_id', uid).limit(1);
+      isBookmarked = ba && ba.length > 0;
+    }
+    stats = { like_count: likeCount || 0, comment_count: commentCount || 0, is_liked: isLiked, is_bookmarked: isBookmarked };
+    POST_STATS[post.id] = stats;
   }
+
+  const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
 
   const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
   const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a'))return;location.href='post.html?id=${post.id}'"`;
@@ -754,8 +805,8 @@ async function renderPostCard(post, isDetail = false) {
       ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount || 0}</span></button>
-        <button class="action" onclick="location.href='post.html?id=${post.id}'">💬 <span>${commentCount || 0}</span></button>
+        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span></button>
+        <button class="action" onclick="location.href='post.html?id=${post.id}'">💬 <span>${commentCount}</span></button>
         <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">🔖 <span>${isBookmarked ? '已赞同' : '赞同'}</span></button>
       </div>
     </article>
@@ -1402,6 +1453,7 @@ async function initHome() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
+  await loadPostStats();
   await loadAds();
   await loadHotsearch();
 
@@ -1467,7 +1519,8 @@ async function initCharacter() {
   if (!char) { root.innerHTML = '<div class="empty">找不到这个角色</div>'; return; }
   const posts = POSTS.filter(p => p.character === handle);
   const bannerStyle = char.banner ? `style="background-image:url('${char.banner}');background-size:cover;background-position:center"` : '';
-
+  await loadPostStats();
+  
   const { count: realFollowers } = await db.from('follows').select('*', { count: 'exact', head: true }).eq('character_id', handle);
   const totalFollowers = (char.baseFollowers || 0) + (realFollowers || 0);
 
@@ -1524,6 +1577,7 @@ async function initPost() {
   await checkUser();
   await loadData();
   await loadForumData();
+  await loadPostStats();
   const id = new URLSearchParams(location.search).get('id');
   const post = POSTS.find(p => p.id === id) || FORUM_POSTS.find(p => p.id === id);
     // 论坛帖如果是别人的阵营，标记只读
