@@ -6,12 +6,14 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ===== 2. 全局变量 =====
 let forumReadOnly = false;
 let currentUser = null;
-let POST_STATS = {}; // post_id -> { like_count, comment_count, is_liked, is_bookmarked }
 let currentProfile = null;
+let POST_STATS = {};
+let _unreadCache = { count: 0, t: 0 };
 
 // ===== 3. 工具函数 =====
 function $(sel, root = document) { return root.querySelector(sel); }
 function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
+
 // ===== 阵营测试题库 =====
 const QUIZ_DATA = {
   '417号航线': [
@@ -81,7 +83,6 @@ const QUIZ_DATA = {
   ]
 };
 
-// 洗牌
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -93,6 +94,7 @@ function shuffle(arr) {
 
 let quizState = null;
 let factionChangeMode = false;
+
 // ===== 位置数据 =====
 const LOCATIONS = {
   '417号航线': ['绿林', '荒芜地', '红叶镇', '石地', '白地', '洞穴', '山地'],
@@ -106,7 +108,8 @@ function parseLocation(str) {
   const parts = str.split('·');
   return { region: parts[0] || '', detail: parts[1] || '' };
 }
-//======阵营称号========
+
+// ===== 阵营称号 =====
 function factionTitle(faction) {
   if (faction === '精灵') return '旅人';
   if (faction === '矮人') return '锻造学徒';
@@ -115,6 +118,7 @@ function factionTitle(faction) {
   if (faction === '240' || faction === '246' || faction === '240-1') return '人类';
   return '';
 }
+
 // ===== 阵营图标 =====
 function factionIcon(faction) {
   if (faction === '精灵') return '🦌';
@@ -141,6 +145,7 @@ function applyFactionTheme() {
   else if (f === '异人') document.body.classList.add('faction-alien');
   else if (f === '240' || f === '246' || f === '240-1') document.body.classList.add('faction-240');
 }
+
 function relativeTime(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr);
@@ -155,6 +160,7 @@ function relativeTime(dateStr) {
   if (diff < 86400 * 365) return Math.floor(diff / 86400 / 30) + ' 个月前';
   return Math.floor(diff / 86400 / 365) + ' 年前';
 }
+
 // ===== 用户头像 HTML =====
 function userAvatarHTML(profile, size = 28) {
   const ch = (profile && profile.username) ? profile.username.slice(0, 1) : '?';
@@ -275,7 +281,6 @@ function openCropperDialog(file, bucket, maxW, maxH, maxKB, field, aspectRatio) 
     });
     if (!canvas) return showToast('裁剪失败');
 
-    // 质量从 0.9 开始，压到目标大小
     let quality = 0.9;
     const tryBlob = (q) => new Promise(r => canvas.toBlob(r, 'image/webp', q));
 
@@ -330,6 +335,7 @@ function showToast(msg) {
   t.textContent = msg; t.classList.add('show');
   clearTimeout(t._timer); t._timer = setTimeout(()=>t.classList.remove('show'), 2000);
 }
+
 function parseFrontMatter(text) {
   const cleanText = text.replace(/\\/g, '');
   const m = cleanText.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
@@ -341,12 +347,13 @@ function parseFrontMatter(text) {
     const key = line.slice(0, idx).trim();
     let val = line.slice(idx + 1).trim();
     if (val.startsWith('[') && val.endsWith(']')) {
-      val = val.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
+      val = val.slice(1, -1).split(/[,，]/).map(s => s.trim()).filter(Boolean);
     }
     data[key] = val;
   });
   return { data, content: m[2] };
 }
+
 function renderMarkdown(md) {
   let html = md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" onclick="openImageViewer(\'' + '$2' + '\')">');
@@ -355,6 +362,7 @@ function renderMarkdown(md) {
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
   return html.split(/\n\n+/).map(p => '<p>'+p.replace(/\n/g,'<br>')+'</p>').join('');
 }
+
 function avatarHTML(char, size = '') {
   const cls = 'avatar' + (size ? ' ' + size : '');
   const ch = (char && char.name) ? char.name.slice(0, 1) : '?';
@@ -388,6 +396,7 @@ async function checkUser() {
     }
     applyFactionTheme();
     if (typeof renderSidebar === 'function') await renderSidebar();
+    if (typeof checkNewReplies === 'function') checkNewReplies();
   })();
   const r = await _checkUserPromise;
   _checkUserPromise = null;
@@ -577,12 +586,12 @@ async function finalizeFaction(faction) {
     showToast('欢迎来到 ' + faction);
   }
 
+  const wasChange = factionChangeMode;
   quizState = null;
   factionChangeMode = false;
   await checkUser();
 
-  // 如果是老用户改阵营，直接关；新用户，弹推荐
-  if (factionChangeMode === false) {
+  if (wasChange === false) {
     await showRecommendedCharacters(faction);
   } else {
     const m = document.getElementById('faction-modal');
@@ -595,7 +604,6 @@ async function showRecommendedCharacters(myFaction) {
   const c = document.getElementById('faction-modal-content');
   if (!m || !c) return;
 
-  // 同阵营优先，不够用其他补
   const all = Object.values(CHARACTERS).filter(ch => ch.faction);
   const sameFaction = all.filter(ch => ch.faction === myFaction);
   const others = all.filter(ch => ch.faction !== myFaction);
@@ -648,7 +656,6 @@ function closeRecommended() {
 }
 
 function showBannedScreen() {
-  // 保留顶栏、侧边栏、页脚，只在主内容区显示封禁提示
   const main = document.querySelector('main');
   if (main) {
     main.innerHTML = `
@@ -666,9 +673,7 @@ function showBannedScreen() {
       </div>
     `;
   }
-  // 同时把顶栏的登录状态更新一下（显示昵称 + 退出）
   updateUIForLoggedIn();
-  // 仍要渲染侧边栏（让用户能浏览其他页面，但不能互动）
   if (typeof renderSidebar === 'function') renderSidebar();
 }
 
@@ -694,31 +699,28 @@ async function handleRegister() {
 
   closeAuthModal();
 
-  // 稍等一下，让 Supabase 建立 session
   setTimeout(async () => {
     const { data: { user } } = await db.auth.getUser();
 
     if (!user) {
-      // 邮箱确认还开着：用户未登录，无法选阵营
       showToast('注册成功，请先到邮箱点击确认链接，再回来登录');
       return;
     }
 
-    // 已自动登录，弹阵营窗口
     currentUser = user;
     const m = document.getElementById('faction-modal');
     if (m) m.style.display = 'flex';
   }, 600);
 }
+
 async function handleLogout() {
   await db.auth.signOut(); currentUser = null; currentProfile = null;
   showToast('你离开了 TALK'); updateUIForLoggedOut(); location.reload();
 }
 
-// ===== 5. 数据加载与渲染 =====
+// ===== 5. 数据加载 =====
 let CHARACTERS = {}, POSTS = [];
 async function loadData() {
-  // 用 sessionStorage 缓存，30 分钟有效
   const CACHE_KEY = 'talk_data_cache_v1';
   const CACHE_TTL = 30 * 60 * 1000;
 
@@ -806,7 +808,6 @@ function renderPostCard(post, isDetail = false) {
   const tags = (post.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
-  // 从缓存读，缓存没有就补一次查询
   let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
 
   const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
@@ -843,20 +844,19 @@ async function toggleLike(postId, btn) {
   const heartSpan = btn.querySelector('.heart-icon');
   const isLiked = btn.classList.contains('liked');
   if (isLiked) {
-    await db.from('likes').delete().
-    if (!POST_STATS[postId]) POST_STATS[postId] = { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
-    POST_STATS[postId].is_liked = true;
-    POST_STATS[postId].like_count++;
-    eq('post_id', postId).eq('user_id', currentUser.id);
+    await db.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    if (POST_STATS[postId]) {
+      POST_STATS[postId].is_liked = false;
+      POST_STATS[postId].like_count = Math.max(0, POST_STATS[postId].like_count - 1);
+    }
     btn.classList.remove('liked');
     countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
     if (heartSpan) heartSpan.textContent = '♡';
   } else {
     await db.from('likes').insert({ post_id: postId, user_id: currentUser.id });
-    if (POST_STATS[postId]) {
-      POST_STATS[postId].is_liked = false;
-      POST_STATS[postId].like_count = Math.max(0, POST_STATS[postId].like_count - 1);
-    }
+    if (!POST_STATS[postId]) POST_STATS[postId] = { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
+    POST_STATS[postId].is_liked = true;
+    POST_STATS[postId].like_count++;
     btn.classList.add('liked');
     btn.style.animation = 'none';
     void btn.offsetWidth;
@@ -870,15 +870,18 @@ async function toggleBookmark(postId, btn) {
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
   if (!currentUser) return showToast('请先登录');
   const span = btn.querySelector('span');
-  const isBookmarked = span.textContent === '已收藏';
+  const isBookmarked = btn.classList.contains('bookmarked');
   if (isBookmarked) {
     await db.from('bookmarks').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    if (POST_STATS[postId]) POST_STATS[postId].is_bookmarked = false;
     btn.classList.remove('bookmarked');
-    span.textContent = '收藏';
+    span.textContent = '赞同';
   } else {
     await db.from('bookmarks').insert({ post_id: postId, user_id: currentUser.id });
+    if (!POST_STATS[postId]) POST_STATS[postId] = { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
+    POST_STATS[postId].is_bookmarked = true;
     btn.classList.add('bookmarked');
-    span.textContent = '已收藏';
+    span.textContent = '已赞同';
   }
 }
 
@@ -889,7 +892,6 @@ async function loadComments(postId) {
   if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
 
-  // 查询点赞
   const commentIds = data.map(c => c.id);
   const likeCounts = {};
   const likedByMe = {};
@@ -901,7 +903,6 @@ async function loadComments(postId) {
     });
   }
 
-  // 批量查所有评论者的昵称和头像
   const userIds = [...new Set(data.map(c => c.user_id).filter(Boolean))];
   const profileMap = {};
   if (userIds.length) {
@@ -909,7 +910,6 @@ async function loadComments(postId) {
     (profiles || []).forEach(p => { profileMap[p.id] = p; });
   }
 
-  // 组织树形结构
   const roots = data.filter(c => !c.parent_id);
   const repliesMap = {};
   data.filter(c => c.parent_id).forEach(c => {
@@ -917,7 +917,7 @@ async function loadComments(postId) {
     repliesMap[c.parent_id].push(c);
   });
 
-  function renderOne(c, isReply) {
+  const renderOne = (c, isReply) => {
     const p = profileMap[c.user_id] || {};
     const isMe = currentUser && c.user_id === currentUser.id;
     const displayName = p.username || '匿名旅者';
@@ -953,7 +953,7 @@ async function loadComments(postId) {
         </div>
       </div>
     `;
-  }
+  };
 
   let html = '';
   roots.forEach(c => {
@@ -964,44 +964,6 @@ async function loadComments(postId) {
   });
   list.innerHTML = html;
 }
-
-  function renderOne(c, isReply) {
-    const p = profileMap[c.user_id] || {};
-    const isMe = currentUser && c.user_id === currentUser.id;
-    const displayName = p.username || '匿名旅者';
-    const nameHTML = isMe
-      ? `<b>${displayName.replace(/</g,'&lt;')}</b>`
-      : `<a href="user.html?id=${c.user_id}" style="color:var(--primary-dark);font-weight:600;">${displayName.replace(/</g,'&lt;')}</a>`;
-    const avatarHTMLSmall = userAvatarHTML(p, 24);
-    const factionIconHTML = p.faction ? factionIcon(p.faction) + ' ' : '';
-
-    const count = likeCounts[c.id] || 0;
-    const liked = !!likedByMe[c.id];
-    const canDelete = isMe;
-    return `
-      <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          ${avatarHTMLSmall}
-          <span>${factionIconHTML}${nameHTML}</span>
-        </div>
-        <div style="word-break:break-word;line-height:1.6;">${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-        <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
-          <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
-            <span class="heart-icon">${liked ? '♥' : '♡'}</span> <span class="like-count">${count}</span>
-          </button>
-          <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
-          <button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>
-          ${canDelete ? `<button onclick="deleteOwnComment('${c.id}', '${postId}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">删除</button>` : ''}
-        </div>
-        <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
-          <div style="display:flex;gap:6px;">
-            <input id="reply-input-${c.id}" type="text" maxlength="500" placeholder="回复..." style="flex:1;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-            <button class="btn btn-primary" onclick="submitReply('${postId}', '${c.id}')" style="padding:6px 12px;font-size:13px;">发送</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
 
 function showReplyBox(commentId) {
   const box = document.getElementById(`reply-box-${commentId}`);
@@ -1087,11 +1049,24 @@ async function submitComment(postId) {
 
   const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content });
   if (error) return showToast('评论失败：' + error.message);
+  if (POST_STATS[postId]) POST_STATS[postId].comment_count++;
   showToast('你说了一句话');
   input.value = '';
   await loadComments(postId);
   const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
   if (btn) btn.textContent = parseInt(btn.textContent) + 1;
+}
+
+async function deleteOwnComment(commentId, postId) {
+  if (!currentUser) return;
+  const ok = confirm('确定删除这条评论吗？删除后无法恢复。');
+  if (!ok) return;
+  const { error } = await db.from('comments').delete().eq('id', commentId).eq('user_id', currentUser.id);
+  if (error) return showToast('删除失败：' + error.message);
+  showToast('评论已删除');
+  await loadComments(postId);
+  const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
+  if (btn) btn.textContent = Math.max(0, parseInt(btn.textContent) - 1);
 }
 
 // ===== 7. 关注角色 =====
@@ -1118,15 +1093,22 @@ async function toggleFollow(charHandle, btn) {
   }
 }
 
-// ===== 8. 角色主页标签页渲染 =====
+async function unfollowFromProfile(handle, btn) {
+  if (!currentUser) return;
+  await db.from('follows').delete().eq('character_id', handle).eq('user_id', currentUser.id);
+  showToast('你暂时放下了他');
+  btn.closest('.card').remove();
+}
+
+// ===== 8. 角色主页标签页 =====
 async function renderCharacterTab(tab, char, posts) {
   const tabContent = $('#tab-content');
   const privacy = char.privacy || { follows: true, likes: true, bookmarks: true };
 
   if (tab === 'posts') {
     if (posts.length) {
-      const html = await Promise.all(posts.map(renderPostCard));
-      tabContent.innerHTML = html.join('');
+      const html = posts.map(p => renderPostCard(p)).join('');
+      tabContent.innerHTML = html;
     } else {
       tabContent.innerHTML = '<div class="empty">还没有动态</div>';
     }
@@ -1150,15 +1132,13 @@ async function renderCharacterTab(tab, char, posts) {
     const likeIds = char.likes || [];
     const likedPosts = POSTS.filter(p => likeIds.includes(p.id));
     if (!likedPosts.length) return tabContent.innerHTML = '<div class="empty">还没有点赞过帖子</div>';
-    const html = await Promise.all(likedPosts.map(renderPostCard));
-    tabContent.innerHTML = html.join('');
+    tabContent.innerHTML = likedPosts.map(p => renderPostCard(p)).join('');
   } else if (tab === 'bookmarks') {
     if (!privacy.bookmarks) return tabContent.innerHTML = '<div class="empty">该角色未公开收藏列表</div>';
     const bkIds = char.bookmarks || [];
     const bkPosts = POSTS.filter(p => bkIds.includes(p.id));
     if (!bkPosts.length) return tabContent.innerHTML = '<div class="empty">还没有收藏过帖子</div>';
-    const html = await Promise.all(bkPosts.map(renderPostCard));
-    tabContent.innerHTML = html.join('');
+    tabContent.innerHTML = bkPosts.map(p => renderPostCard(p)).join('');
   }
 }
 
@@ -1271,13 +1251,14 @@ async function submitMessage(charHandle) {
 
   const { error } = await db.from('messages').insert({ user_id: currentUser.id, character_id: charHandle, content: content });
   if (error) return showToast('发送失败：' + error.message);
+
   await db.from('notifications').insert({
-  user_id: currentUser.id,
-  type: 'message',
-  target_id: '你的私信已送达，等待角色回复',
-  is_read: false
-});
-  
+    user_id: currentUser.id,
+    type: 'message',
+    target_id: '你的私信已送达，等待角色回复',
+    is_read: false
+  });
+
   showToast('信已经送出去了');
   input.value = '';
   await initMessage();
@@ -1348,7 +1329,6 @@ async function initProfile() {
     ? `background:url('${currentProfile.banner_url}') center/cover no-repeat;`
     : `background:linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);`;
 
-  // 统计：4 个数字
   const stats = await getUserStats();
   const followCount = stats.follow;
   const likeCount = stats.like;
@@ -1443,15 +1423,13 @@ async function initProfile() {
       const ids = (likesData || []).map(l => l.post_id);
       const likedPosts = POSTS.filter(p => ids.includes(p.id));
       if (!likedPosts.length) return container.innerHTML = '<div class="empty">你还没有点赞过帖子</div>';
-      const html = await Promise.all(likedPosts.map(renderPostCard));
-      container.innerHTML = html.join('');
+      container.innerHTML = likedPosts.map(p => renderPostCard(p)).join('');
     } else if (tab === 'bookmarks') {
       const { data: bkData } = await db.from('bookmarks').select('post_id').eq('user_id', currentUser.id);
       const ids = (bkData || []).map(b => b.post_id);
       const bkPosts = POSTS.filter(p => ids.includes(p.id));
       if (!bkPosts.length) return container.innerHTML = '<div class="empty">你还没有收藏过帖子</div>';
-      const html = await Promise.all(bkPosts.map(renderPostCard));
-      container.innerHTML = html.join('');
+      container.innerHTML = bkPosts.map(p => renderPostCard(p)).join('');
     } else if (tab === 'comments') {
       const { data: cmData } = await db.from('comments').select('content, post_id, created_at').eq('user_id', currentUser.id).order('created_at', { ascending: false });
       if (!cmData || !cmData.length) return container.innerHTML = '<div class="empty">你还没有发过评论</div>';
@@ -1508,7 +1486,6 @@ async function initHome() {
     const parts = [];
     for (let i = 0; i < sortedPosts.length; i++) {
       parts.push(renderPostCard(sortedPosts[i]));
-      // 每 3 条帖子里插一个广告
       if ((i + 1) % 3 === 0) {
         parts.push(renderAdCard());
       }
@@ -1516,7 +1493,6 @@ async function initHome() {
     feed.innerHTML = parts.join('');
   }
 
-  // 右侧栏：热搜 + 推荐角色
   const sidebarRight = document.querySelector('.sidebar-right');
   if (sidebarRight) {
     sidebarRight.innerHTML = `
@@ -1544,14 +1520,14 @@ async function initCharacter() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
+  await loadPostStats();
   const handle = new URLSearchParams(location.search).get('handle') || 'daniel';
   const char = CHARACTERS[handle];
   const root = $('#profile');
   if (!char) { root.innerHTML = '<div class="empty">找不到这个角色</div>'; return; }
   const posts = POSTS.filter(p => p.character === handle);
   const bannerStyle = char.banner ? `style="background-image:url('${char.banner}');background-size:cover;background-position:center"` : '';
-  await loadPostStats();
-  
+
   const { count: realFollowers } = await db.from('follows').select('*', { count: 'exact', head: true }).eq('character_id', handle);
   const totalFollowers = (char.baseFollowers || 0) + (realFollowers || 0);
 
@@ -1611,13 +1587,14 @@ async function initPost() {
   await loadPostStats();
   const id = new URLSearchParams(location.search).get('id');
   const post = POSTS.find(p => p.id === id) || FORUM_POSTS.find(p => p.id === id);
-    // 论坛帖如果是别人的阵营，标记只读
+
   const isForumPost = FORUM_POSTS.some(p => p.id === id);
-  if (isForumPost && currentProfile && post.faction && post.faction !== currentProfile.faction) {
+  if (isForumPost && currentProfile && post && post.faction && post.faction !== currentProfile.faction) {
     forumReadOnly = true;
   } else {
     forumReadOnly = false;
   }
+
   const root = $('#post-detail');
   if (!post) {
     root.innerHTML = '<div class="empty">找不到这篇帖子</div>';
@@ -1641,13 +1618,6 @@ async function initPost() {
     </div>
   `;
   await loadComments(post.id);
-}
-
-async function unfollowFromProfile(handle, btn) {
-  if (!currentUser) return;
-  await db.from('follows').delete().eq('character_id', handle).eq('user_id', currentUser.id);
-  showToast('你暂时放下了他');
-  btn.closest('.card').remove();
 }
 
 // ===== 12. 设置页 =====
@@ -1748,7 +1718,6 @@ async function initSettings() {
     </div>
   `;
 
-  // 简介字数实时更新
   const bioEl = document.getElementById('new-bio');
   if (bioEl) {
     bioEl.addEventListener('input', () => {
@@ -1756,13 +1725,8 @@ async function initSettings() {
     });
   }
 
-  // 初始化位置下拉
   initLocationSelectors();
-
-  // 昵称冷却显示
   showUsernameCooldown();
-
-  // 阵营冷却检测
   showFactionCooldown();
 }
 
@@ -1771,7 +1735,6 @@ function showFactionCooldown() {
   const el = document.getElementById('faction-cooldown');
   if (!btn || !el) return;
 
-  // 如果数据库里没记录，先补上"现在"
   if (!currentProfile.faction_chosen_at) {
     db.from('profiles').update({ faction_chosen_at: new Date().toISOString() }).eq('id', currentUser.id);
     currentProfile.faction_chosen_at = new Date().toISOString();
@@ -1808,13 +1771,11 @@ function initLocationSelectors() {
 
   const current = parseLocation(currentProfile.location);
 
-  // 填充大区
   regionSel.innerHTML = '<option value="">选择航线 / 大区</option>' +
     Object.keys(LOCATIONS).map(k =>
       `<option value="${k}" ${k === current.region ? 'selected' : ''}>${k}</option>`
     ).join('');
 
-  // 根据大区填二级
   const fillDetail = () => {
     const r = regionSel.value;
     if (!r) {
@@ -1828,7 +1789,6 @@ function initLocationSelectors() {
   };
   fillDetail();
 
-  // 检查冷却
   if (currentProfile.location_updated_at) {
     const last = new Date(currentProfile.location_updated_at).getTime();
     const days = (Date.now() - last) / 86400000;
@@ -1881,7 +1841,6 @@ async function updateUsername() {
   if (await containsSensitiveWord(newName)) return showToast('昵称包含敏感词，请修改后重试');
   if (containsLink(newName)) return showToast('昵称不允许包含外链');
 
-  // 冷却检查
   if (currentProfile.username_updated_at) {
     const last = new Date(currentProfile.username_updated_at).getTime();
     if ((Date.now() - last) / 86400000 < 30) {
@@ -1918,7 +1877,6 @@ async function updateLocation() {
   const detail = document.getElementById('loc-detail').value;
   if (!region || !detail) return showToast('请先选择大区和具体位置');
 
-  // 冷却检查
   if (currentProfile.location_updated_at) {
     const last = new Date(currentProfile.location_updated_at).getTime();
     if ((Date.now() - last) / 86400000 < 30) {
@@ -1948,7 +1906,6 @@ async function updatePassword() {
   if (p1 !== p2) return showToast('两次输入的新密码不一致');
   if (p1 === oldPwd) return showToast('新密码不能与旧密码相同');
 
-  // 用旧密码验证一次
   const { error: verifyErr } = await db.auth.signInWithPassword({
     email: currentUser.email,
     password: oldPwd
@@ -1984,8 +1941,7 @@ async function deleteAccount() {
   }
 }
 
-// ===== 13. 全站侧边栏自动生成 =====
-let SIDEBAR_RENDERED = false;
+// ===== 13. 全站侧边栏 =====
 async function renderSidebar() {
   const sidebar = document.querySelector('.sidebar-left');
   if (!sidebar) return;
@@ -2015,12 +1971,11 @@ async function renderSidebar() {
       `).join('')}
     </nav>
   `;
-  SIDEBAR_RENDERED = true;
 }
 
-// ===== 未读红点自动更新 =====
 async function updateUnreadBadge() {
   if (!currentUser) return;
+  _unreadCache.t = 0;
   const unread = await getUnreadCount();
   const link = document.querySelector('.sidebar-left a[href="notifications.html"]');
   if (!link) return;
@@ -2040,7 +1995,6 @@ async function updateUnreadBadge() {
   }
 }
 
-// 启动轮询（每 30 秒）
 setInterval(() => {
   if (currentUser) {
     updateUnreadBadge();
@@ -2050,7 +2004,9 @@ setInterval(() => {
 let CHECKING_REPLIES = false;
 async function checkNewReplies() {
   if (!currentUser || CHECKING_REPLIES) return;
+  if (window._lastRepliesCheck && Date.now() - window._lastRepliesCheck < 60000) return;
   CHECKING_REPLIES = true;
+  window._lastRepliesCheck = Date.now();
   try {
     const { data: newMsgs } = await db.from('messages')
       .select('id, character_id, content')
@@ -2088,7 +2044,9 @@ function notifyText(type) {
 
 async function getUnreadCount() {
   if (!currentUser) return 0;
+  if (Date.now() - _unreadCache.t < 60000) return _unreadCache.count;
   const { count } = await db.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('is_read', false);
+  _unreadCache = { count: count || 0, t: Date.now() };
   return count || 0;
 }
 
@@ -2140,6 +2098,7 @@ async function initNotifications() {
 
 async function markRead(id) {
   await db.from('notifications').update({ is_read: true }).eq('id', id);
+  _unreadCache.t = 0;
   await initNotifications();
   await renderSidebar();
 }
@@ -2185,7 +2144,6 @@ async function loadHotsearch() {
 
 function getHotsearchFor(faction) {
   if (!faction || !HOTSEARCH.byFaction) return [];
-  // 246 和 240-1 共享 240 的热搜
   if (faction === '246' || faction === '240-1') {
     return HOTSEARCH.byFaction['240'] || [];
   }
@@ -2294,7 +2252,6 @@ async function loadForumData() {
       return { id: p.id, ...fm, content };
     }));
 
-    // 过滤：有 event 字段的帖子，只在该节日进行中才显示
     const activeEvents = getActiveEvents();
     const activeNames = activeEvents.map(e => e.name);
     FORUM_POSTS = allPosts.filter(p => {
@@ -2309,6 +2266,7 @@ async function loadForumData() {
 async function initForum() {
   await checkUser();
   await loadData();
+  await loadPostStats();
   await loadForumData();
 
   const root = $('#forum-app');
@@ -2332,7 +2290,6 @@ async function initForum() {
 
   const posts = FORUM_POSTS.filter(p => p.faction === viewingFaction);
 
-  // 节日横幅：只显示自己身份能看到的节日
   const activeEvents = getActiveEvents();
   const myEvents = filterEventsByFaction(activeEvents, myFaction);
   const eventBanner = renderEventBanner(myEvents);
@@ -2347,12 +2304,11 @@ async function initForum() {
   `;
 
   const postsHTML = posts.length
-    ? (await Promise.all(posts.map(p => renderPostCard(p)))).join('')
+    ? posts.map(p => renderPostCard(p)).join('')
     : '<div class="empty">这个阵营还没有帖子</div>';
 
   root.innerHTML = topBanner + postsHTML;
 
-  // 右侧栏：论坛列表
   if (sidebarRight) {
     const allFactions = ['精灵', '矮人', '人类', '异人', '240', '246', '240-1'];
     const others = allFactions.filter(f => f !== myFaction);
@@ -2386,7 +2342,7 @@ async function initForum() {
   window.addEventListener('beforeunload', () => { forumReadOnly = false; });
 }
 
-// ===== 16. 顶部搜索框全局绑定 =====
+// ===== 16. 顶部搜索框 =====
 function bindSearchBox() {
   const inputs = document.querySelectorAll('.search-box input');
   inputs.forEach(input => {
@@ -2410,11 +2366,10 @@ async function initSearch() {
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
   await loadPostStats();
-  
+
   const root = $('#search-app');
   const q = new URLSearchParams(location.search).get('q') || '';
 
-  // 把关键词填回搜索框
   const searchInput = document.querySelector('.search-box input');
   if (searchInput && q) searchInput.value = q;
 
@@ -2428,7 +2383,6 @@ async function initSearch() {
 
   const lowerQ = q.toLowerCase();
 
-  // 搜角色
   const matchedChars = Object.values(CHARACTERS).filter(c =>
     (c.name && c.name.toLowerCase().includes(lowerQ)) ||
     (c.nameEn && c.nameEn.toLowerCase().includes(lowerQ)) ||
@@ -2437,7 +2391,6 @@ async function initSearch() {
     (c.location && c.location.toLowerCase().includes(lowerQ))
   );
 
-  // 搜帖子
   const matchedPosts = POSTS.filter(p => {
     const char = CHARACTERS[p.character] || {};
     return (p.content && p.content.toLowerCase().includes(lowerQ)) ||
@@ -2481,8 +2434,7 @@ async function initSearch() {
 
   if (matchedPosts.length) {
     html += `<div class="card" style="margin-top:16px;"><h3>帖子（${matchedPosts.length}）</h3></div>`;
-    const postCards = await Promise.all(matchedPosts.map(renderPostCard));
-    html += postCards.join('');
+    html += matchedPosts.map(p => renderPostCard(p)).join('');
   }
 
   root.innerHTML = html;
@@ -2528,17 +2480,11 @@ async function containsSensitiveWord(text) {
 function containsLink(text) {
   if (!text) return false;
   const lower = text.toLowerCase();
-  // http / https
   if (/https?:\/\//.test(lower)) return true;
-  // www.
   if (/www\./.test(lower)) return true;
-  // 常见域名后缀
   if (/\.(com|cn|net|org|io|me|xyz|top|cc|tv|info|biz|app|dev|co|gov|edu)(\b|\/|:|$)/.test(lower)) return true;
-  // 变体写法：hxxp、h t t p、h-t-t-p
   if (/h[\s\-_.]*x[\s\-_.]*x[\s\-_.]*p/i.test(text)) return true;
-  // 变体：w w w
   if (/w[\s\-_.]*w[\s\-_.]*w[\s\-_.]*\./i.test(text)) return true;
-  // IP 地址
   if (/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(text)) return true;
   return false;
 }
@@ -2583,7 +2529,6 @@ async function submitReport(targetType, targetId) {
   const selected = document.querySelector('input[name="report-reason"]:checked');
   if (!selected) return showToast('请选择举报原因');
 
-  // 检查是否已举报过同一内容
   const { data: existing } = await db.from('reports')
     .select('id').eq('reporter_id', currentUser.id)
     .eq('target_type', targetType).eq('target_id', targetId).limit(1);
@@ -2604,7 +2549,7 @@ async function submitReport(targetType, targetId) {
 }
 
 // ===== 20. 管理后台 =====
-const ADMIN_EMAILS = ['wuumii@outlook.com']; // ← 改成你自己的邮箱
+const ADMIN_EMAILS = ['wuumii@outlook.com'];
 
 function isAdmin() {
   return currentUser && ADMIN_EMAILS.includes(currentUser.email);
@@ -2622,7 +2567,6 @@ async function initAdmin() {
     return;
   }
 
-  // 加载待处理举报
   const { data: reports, error } = await db.from('reports').select('*').eq('status', 'pending').order('created_at', { ascending: false });
   if (error) { root.innerHTML = '<div class="empty">加载失败：' + error.message + '</div>'; return; }
 
@@ -2636,7 +2580,6 @@ async function initAdmin() {
     return;
   }
 
-  // 一次性把涉及到的评论查出来
   const commentIds = reports.filter(r => r.target_type === 'comment').map(r => r.target_id);
   const { data: comments } = await db.from('comments').select('id, content, post_id, user_id, status').in('id', commentIds);
   const commentMap = {};
@@ -2727,11 +2670,7 @@ async function handleForgotPassword() {
 async function initResetPassword() {
   await checkUser();
 
-  // Supabase 重置链接回来时，URL 里会带 access_token，SDK 会自动处理 session
-  // 直接检查当前用户是否处于"重置密码"状态
   const root = $('#reset-app');
-  const hash = location.hash || '';
-  const isRecovery = hash.includes('type=recovery') || hash.includes('access_token');
 
   root.innerHTML = `
     <div class="card" style="max-width:480px;margin:40px auto;">
@@ -2764,18 +2703,6 @@ async function submitNewPassword() {
   setTimeout(() => { location.href = 'index.html'; }, 1800);
 }
 
-async function deleteOwnComment(commentId, postId) {
-  if (!currentUser) return;
-  const ok = confirm('确定删除这条评论吗？删除后无法恢复。');
-  if (!ok) return;
-  const { error } = await db.from('comments').delete().eq('id', commentId).eq('user_id', currentUser.id);
-  if (error) return showToast('删除失败：' + error.message);
-  showToast('评论已删除');
-  await loadComments(postId);
-  const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
-  if (btn) btn.textContent = Math.max(0, parseInt(btn.textContent) - 1);
-}
-
 // ===== 22. 旅者档案（看别人的主页） =====
 async function initUserProfileView() {
   await checkUser();
@@ -2789,26 +2716,17 @@ async function initUserProfileView() {
     return;
   }
 
-  // 自己的档案 → 跳回 profile.html
   if (currentUser && currentUser.id === userId) {
     location.href = 'profile.html';
     return;
   }
 
-  // 查目标用户 profile
   const { data: profile, error } = await db.from('profiles').select('*').eq('id', userId).single();
   if (error || !profile) {
     root.innerHTML = '<div class="empty">找不到这位旅者</div>';
     return;
   }
 
-  // 查 Auth 里的注册时间
-  const { data: { user: targetUser } } = await db.rpc('get_user_created_at', { uid: userId }).then(
-    r => ({ data: { user: r.data ? { created_at: r.data } : null } }),
-    () => ({ data: { user: null } })
-  ).catch(() => ({ data: { user: null } }));
-
-  // 简化：注册时间从 profiles.created_at 取
   const registeredAt = profile.created_at || new Date().toISOString();
   const joinedDays = Math.max(0, Math.floor((Date.now() - new Date(registeredAt).getTime()) / 86400000));
   const username = profile.username || '匿名旅者';
@@ -2872,8 +2790,7 @@ async function initUserProfileView() {
       const ids = (likeData || []).map(l => l.post_id);
       const likedPosts = POSTS.filter(p => ids.includes(p.id));
       if (!likedPosts.length) return container.innerHTML = '<div class="empty">这位旅者还没有点赞过帖子</div>';
-      const html = await Promise.all(likedPosts.map(renderPostCard));
-      container.innerHTML = html.join('');
+      container.innerHTML = likedPosts.map(p => renderPostCard(p)).join('');
     }
   };
 
@@ -2893,9 +2810,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const mainEl = document.querySelector('main');
   if (mainEl) {
     const text = mainEl.textContent.trim();
-    // 只有当前是"加载中…"这种占位文字时才替换
     if (!text || text.includes('加载中')) {
       mainEl.innerHTML = renderLoadingHTML();
     }
   }
+  bindSearchBox();
 });
