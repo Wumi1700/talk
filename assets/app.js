@@ -720,8 +720,45 @@ async function handleLogout() {
 
 // ===== 5. 数据加载 =====
 let CHARACTERS = {}, POSTS = [];
+// ===== 数据库字段 → 前端格式 =====
+function normalizeCharacter(c) {
+  return {
+    handle: c.handle,
+    name: c.name,
+    nameEn: c.name_en || '',
+    avatar: c.avatar || '',
+    banner: c.banner || '',
+    bio: c.bio || '',
+    baseFollowers: c.base_followers || 0,
+    following: c.following || 0,
+    location: c.location || '',
+    verified: c.verified || '',
+    faction: c.faction || '',
+    privacy: c.privacy || { follows: true, likes: true, bookmarks: true },
+    follows: c.follows_list || [],
+    likes: c.likes_list || [],
+    bookmarks: c.bookmarks_list || [],
+    isNPC: c.is_npc || false
+  };
+}
+
+function normalizePost(p) {
+  return {
+    id: p.id,
+    character: p.character,
+    date: p.date || '',
+    tags: p.tags || [],
+    location: p.location || '',
+    images: p.images || [],
+    content: p.content || '',
+    postType: p.post_type || 'main',
+    faction: p.faction || '',
+    event: p.event || '',
+    archived: p.archived || false
+  };
+}
 async function loadData() {
-  const CACHE_KEY = 'talk_data_cache_v1';
+  const CACHE_KEY = 'talk_data_cache_v2';
   const CACHE_TTL = 30 * 60 * 1000;
 
   try {
@@ -736,16 +773,16 @@ async function loadData() {
     }
   } catch (e) {}
 
-  const [cRes, pRes] = await Promise.all([fetch('data/characters.json'), fetch('posts/posts.json')]);
-  CHARACTERS = await cRes.json();
-  const list = (await pRes.json()).posts;
-  POSTS = await Promise.all(list.map(async p => {
-    const r = await fetch(p.file);
-    const text = await r.text();
-    const { data, content } = parseFrontMatter(text);
-    return { id: p.id, ...data, content };
-  }));
-  POSTS.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+  const [cRes, pRes] = await Promise.all([
+    db.from('characters').select('*'),
+    db.from('posts').select('*').eq('post_type', 'main').order('date', { ascending: false })
+  ]);
+
+  const charObj = {};
+  (cRes.data || []).forEach(c => { charObj[c.handle] = normalizeCharacter(c); });
+  CHARACTERS = charObj;
+
+  POSTS = (pRes.data || []).map(normalizePost);
 
   try {
     sessionStorage.setItem(CACHE_KEY, JSON.stringify({
@@ -2135,9 +2172,20 @@ let HOTSEARCH = { byFaction: {} };
 
 async function loadHotsearch() {
   try {
-    const res = await fetch('data/hotsearch.json');
-    HOTSEARCH = await res.json();
+    const { data, error } = await db.from('hotsearch')
+      .select('faction, rank, text, url')
+      .order('faction', { ascending: true })
+      .order('rank', { ascending: true });
+    if (error) throw error;
+
+    const byFaction = {};
+    (data || []).forEach(row => {
+      if (!byFaction[row.faction]) byFaction[row.faction] = [];
+      byFaction[row.faction].push({ text: row.text, url: row.url });
+    });
+    HOTSEARCH = { byFaction };
   } catch (e) {
+    console.warn('热搜加载失败', e);
     HOTSEARCH = { byFaction: {} };
   }
 }
@@ -2243,14 +2291,12 @@ let FORUM_POSTS = [];
 async function loadForumData() {
   try {
     await loadEvents();
-    const res = await fetch('posts/forum.json');
-    const data = await res.json();
-    const allPosts = await Promise.all(data.posts.map(async p => {
-      const r = await fetch(p.file);
-      const text = await r.text();
-      const { data: fm, content } = parseFrontMatter(text);
-      return { id: p.id, ...fm, content };
-    }));
+    const { data, error } = await db.from('posts')
+      .select('*')
+      .eq('post_type', 'forum');
+    if (error) throw error;
+
+    const allPosts = (data || []).map(normalizePost);
 
     const activeEvents = getActiveEvents();
     const activeNames = activeEvents.map(e => e.name);
@@ -2259,6 +2305,7 @@ async function loadForumData() {
       return activeNames.includes(p.event);
     });
   } catch (e) {
+    console.warn('论坛帖加载失败', e);
     FORUM_POSTS = [];
   }
 }
