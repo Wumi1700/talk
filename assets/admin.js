@@ -640,6 +640,87 @@ async function adminDeleteComment(commentId) {
   if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
 }
 
+// ===== 图片上传到 Supabase Storage =====
+async function uploadPostImage(file) {
+  // 压缩到 800px 宽，质量 0.8
+  const blob = await compressImage(file, 800, 1200, 0.8);
+  const path = `posts/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
+  const { error } = await db.storage.from('post-images').upload(path, blob, {
+    contentType: 'image/webp',
+    upsert: false
+  });
+  if (error) throw error;
+  const { data: { publicUrl } } = db.storage.from('post-images').getPublicUrl(path);
+  return publicUrl;
+}
+
+// 前端压缩（Canvas → WebP）
+function compressImage(file, maxW, maxH, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const ratio = Math.min(maxW / width, maxH / height, 1);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('压缩失败')), 'image/webp', quality);
+    };
+    img.onerror = () => reject(new Error('图片读取失败'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// 触发文件选择
+function pickImages(callback) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp';
+  input.multiple = true;
+  input.onchange = async () => {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    for (const f of files) {
+      try {
+        const url = await uploadPostImage(f);
+        callback(url);
+      } catch (e) {
+        showToast('上传失败：' + (e.message || '未知错误'));
+      }
+    }
+  };
+  input.click();
+}
+
+// 图片列表渲染
+function renderImageList(images) {
+  if (!images.length) return '<div style="font-size:12px;color:var(--muted);">还没有图片</div>';
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;">${images.map((url, i) => `
+    <div style="position:relative;width:100px;height:100px;border-radius:8px;overflow:hidden;background:var(--bg);">
+      <img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;">
+      <button onclick="removeImage(${i})" style="position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.6);color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;">×</button>
+    </div>
+  `).join('')}</div>`;
+}
+
+let _editorImages = [];
+
+function removeImage(index) {
+  _editorImages.splice(index, 1);
+  const el = document.getElementById('pe-image-list');
+  if (el) el.innerHTML = renderImageList(_editorImages);
+}
+
+function addImageToEditor(url) {
+  _editorImages.push(url);
+  const el = document.getElementById('pe-image-list');
+  if (el) el.innerHTML = renderImageList(_editorImages);
+}
+
 // ===== 帖子编辑器 =====
 async function openPostEditor(postId, characterHandle, postType, defaultFaction) {
   let post = null;
@@ -691,8 +772,9 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
       </div>
 
       <div style="margin-bottom:10px;">
-        <label style="font-size:12px;color:var(--muted);">标签（英文逗号分隔）</label>
-        <input id="pe-tags" type="text" value="${esc((p.tags || []).join(','))}" placeholder="日常,公告" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        <label style="font-size:12px;color:var(--muted);">图片（点按钮上传，可多张）</label>
+        <div id="pe-image-list" style="margin-top:6px;">${renderImageList(p.images || [])}</div>
+        <button class="btn" type="button" style="margin-top:8px;font-size:13px;padding:4px 12px;" onclick="pickImages(addImageToEditor)">+ 上传图片</button>
       </div>
 
       <div style="margin-bottom:10px;">
@@ -725,6 +807,7 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
       </div>
     </div>
   `;
+  _editorImages = [...(p.images || [])];
   document.body.appendChild(modal);
 }
 
@@ -734,7 +817,6 @@ async function savePost(mode, postType) {
   const date = document.querySelector('#pe-date').value.trim();
   const location = document.querySelector('#pe-location').value.trim();
   const tagsRaw = document.querySelector('#pe-tags').value.trim();
-  const imagesRaw = document.querySelector('#pe-images').value.trim();
   const content = document.querySelector('#pe-content').value;
   const factionEl = document.querySelector('#pe-faction');
   const eventEl = document.querySelector('#pe-event');
@@ -744,7 +826,7 @@ async function savePost(mode, postType) {
   if (!content.trim()) return showToast('正文不能为空');
 
   const tags = tagsRaw ? tagsRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
-  const images = imagesRaw ? imagesRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
+  const images = [..._editorImages];
 
   const payload = {
     id,
