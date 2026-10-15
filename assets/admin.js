@@ -517,6 +517,129 @@ async function saveHotsearch(faction) {
   showToast(faction + ' 热搜已保存');
 }
 
+// ===== 评论管理面板 =====
+async function openCommentsPanel(postId) {
+  const modal = document.createElement('div');
+  modal.id = 'comments-panel-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;padding:20px;box-sizing:border-box;';
+  document.body.appendChild(modal);
+
+  async function refresh() {
+    modal.innerHTML = '<div style="background:#fff;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;"><div class="empty">加载中…</div></div>';
+
+    const { data: comments, error } = await db.from('comments')
+      .select('id, content, created_at, user_id, as_character, status, parent_id')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      modal.innerHTML = '<div style="background:#fff;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;"><div class="empty">加载失败：' + esc(error.message) + '</div></div>';
+      return;
+    }
+
+    const userIds = [...new Set((comments || []).filter(c => !c.as_character).map(c => c.user_id))];
+    const profileMap = {};
+    if (userIds.length) {
+      const { data: profs } = await db.from('profiles').select('id, username').in('id', userIds);
+      (profs || []).forEach(p => { profileMap[p.id] = p; });
+    }
+
+    const visible = (comments || []).filter(c => c.status !== 'hidden');
+
+    modal.innerHTML = `
+      <div style="background:#fff;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="margin:0;">评论管理 · 帖子 ${esc(postId)}</h3>
+          <button class="btn" onclick="document.getElementById('comments-panel-modal').remove()">关闭</button>
+        </div>
+
+        <div style="padding:12px;background:var(--primary-light);border-radius:8px;margin-bottom:16px;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;">以角色身份发评论</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <select id="cm-char-select" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+              ${Object.values(CHARACTERS).map(c => `<option value="${c.handle}">${esc(c.name)}${c.verified ? ' ✓' : ''}</option>`).join('')}
+            </select>
+            <input id="cm-char-content" type="text" placeholder="以角色身份写评论…" maxlength="500" style="flex:1;min-width:200px;padding:8px;border:1px solid var(--border);border-radius:8px;">
+            <button class="btn btn-primary" onclick="adminPostAsCharacter('${postId}')">发布</button>
+          </div>
+        </div>
+
+        <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">全部评论（${visible.length} 条可见，${(comments||[]).length - visible.length} 条已隐藏）</div>
+
+        ${(comments || []).length === 0 ? '<div class="empty">还没有评论</div>' : (comments || []).map(c => {
+          let name, avatar, isRole = !!c.as_character;
+          if (isRole) {
+            const ch = CHARACTERS[c.as_character] || { name: c.as_character };
+            name = ch.name + '（角色）';
+            avatar = factionIcon(ch.faction);
+          } else {
+            const p = profileMap[c.user_id] || {};
+            name = p.username || '匿名';
+            avatar = '👤';
+          }
+          const hidden = c.status === 'hidden';
+          return `
+            <div style="padding:10px;border-radius:8px;background:${hidden ? '#f5c2c7' : 'var(--bg)'};margin-bottom:8px;">
+              <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">
+                ${avatar} ${esc(name)} · ${new Date(c.created_at).toLocaleString('zh-CN')}
+                ${hidden ? ' · <span style="color:#b02a37;">已隐藏</span>' : ''}
+              </div>
+              <div style="font-size:13px;margin-bottom:8px;word-break:break-word;">${esc(c.content)}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${hidden
+                  ? `<button class="btn" style="font-size:12px;padding:2px 10px;" onclick="adminShowComment('${c.id}')">恢复显示</button>`
+                  : `<button class="btn" style="font-size:12px;padding:2px 10px;border-color:#dc3545;color:#dc3545;" onclick="adminHideCommentDirect('${c.id}')">隐藏</button>`}
+                <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#dc3545;color:#dc3545;" onclick="adminDeleteComment('${c.id}')">删除</button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  await refresh();
+  window._refreshCommentsPanel = refresh;
+}
+
+async function adminPostAsCharacter(postId) {
+  const handle = document.querySelector('#cm-char-select').value;
+  const content = document.querySelector('#cm-char-content').value.trim();
+  if (!content) return showToast('请输入内容');
+
+  const { error } = await db.from('comments').insert({
+    post_id: postId,
+    user_id: null,
+    content: content,
+    as_character: handle,
+    status: 'visible'
+  });
+
+  if (error) return showToast('发布失败：' + error.message);
+  showToast('已发布');
+  document.querySelector('#cm-char-content').value = '';
+  if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
+}
+
+async function adminHideCommentDirect(commentId) {
+  await db.from('comments').update({ status: 'hidden' }).eq('id', commentId);
+  showToast('已隐藏');
+  if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
+}
+
+async function adminShowComment(commentId) {
+  await db.from('comments').update({ status: 'visible' }).eq('id', commentId);
+  showToast('已恢复');
+  if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
+}
+
+async function adminDeleteComment(commentId) {
+  if (!confirm('确定永久删除这条评论吗？')) return;
+  await db.from('comments').delete().eq('id', commentId);
+  showToast('已删除');
+  if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
+}
+
 // ===== 帖子编辑器 =====
 async function openPostEditor(postId, characterHandle, postType, defaultFaction) {
   let post = null;
@@ -598,7 +721,7 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="savePost('${isNew ? 'new' : 'edit'}', '${esc(p.post_type)}')">保存</button>
         ${!isNew ? `<button class="btn" style="border-color:#dc3545;color:#dc3545;" onclick="deletePost('${esc(p.id)}')">删除帖子</button>` : ''}
-        <button class="btn" onclick="document.getElementById('post-editor-modal').remove()">取消</button>
+        <button class="btn" onclick="document.getElementById('post-editor-modal').remove()">取消</button>${!isNew ? `<button class="btn" onclick="openCommentsPanel('${esc(p.id)}')">评论管理</button>` : ''}
       </div>
     </div>
   `;
