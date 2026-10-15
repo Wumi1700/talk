@@ -865,6 +865,7 @@ async function savePost(mode, postType) {
   showToast('已保存');
   document.getElementById('post-editor-modal').remove();
   sessionStorage.removeItem('talk_data_cache_v2');
+  localStorage.setItem('talk_data_version', Date.now().toString());
   renderContent();
 }
 
@@ -875,6 +876,7 @@ async function deletePost(postId) {
   showToast('已删除');
   document.getElementById('post-editor-modal').remove();
   sessionStorage.removeItem('talk_data_cache_v2');
+  localStorage.setItem('talk_data_version', Date.now().toString());
   renderContent();
 }
 
