@@ -757,15 +757,20 @@ function normalizePost(p) {
     archived: p.archived || false
   };
 }
+
 async function loadData() {
   const CACHE_KEY = 'talk_data_cache_v2';
+  const VERSION_KEY = 'talk_data_version';
   const CACHE_TTL = 30 * 60 * 1000;
+
+  const serverVersion = localStorage.getItem(VERSION_KEY) || '0';
 
   try {
     const cached = sessionStorage.getItem(CACHE_KEY);
     if (cached) {
       const obj = JSON.parse(cached);
-      if (Date.now() - obj.t < CACHE_TTL) {
+      const fresh = (Date.now() - obj.t < CACHE_TTL) && (obj.v === serverVersion);
+      if (fresh) {
         CHARACTERS = obj.chars;
         POSTS = obj.posts;
         return;
@@ -787,12 +792,12 @@ async function loadData() {
   try {
     sessionStorage.setItem(CACHE_KEY, JSON.stringify({
       t: Date.now(),
+      v: serverVersion,
       chars: CHARACTERS,
       posts: POSTS
     }));
   } catch (e) {}
 }
-
 async function loadPostStats() {
   POST_STATS = {};
   POSTS.forEach(p => {
