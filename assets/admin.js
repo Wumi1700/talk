@@ -4,6 +4,26 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const ADMIN_EMAILS = ['wuumii@outlook.com'];
+// ===== 从 app.js 复制的工具函数 =====
+function factionIcon(faction) {
+  if (faction === '精灵') return '🦌';
+  if (faction === '矮人') return '⚒️';
+  if (faction === '人类') return '⭐';
+  if (faction === '异人') return '🌲';
+  if (faction === '240') return '⚖️';
+  if (faction === '246') return '🔳';
+  if (faction === '240-1') return '💥';
+  return '';
+}
+
+function factionTitle(faction) {
+  if (faction === '精灵') return '旅人';
+  if (faction === '矮人') return '锻造学徒';
+  if (faction === '人类') return '见习法师';
+  if (faction === '异人') return '泥娃娃';
+  if (faction === '240' || faction === '246' || faction === '240-1') return '人类';
+  return '';
+}
 
 let currentUser = null;
 let currentProfile = null;
