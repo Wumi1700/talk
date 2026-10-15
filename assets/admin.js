@@ -80,6 +80,7 @@ function renderNav() {
   const items = [
     { key: 'todo', icon: '📋', text: '待办' },
     { key: 'inbox', icon: '✉️', text: '私信' },
+    { key: 'content', icon: '📝', text: '内容' },
     { key: 'reports', icon: '🚨', text: '举报' },
     { key: 'users', icon: '👥', text: '用户' },
     { key: 'stats', icon: '📊', text: '数据' },
@@ -97,6 +98,7 @@ async function router() {
   renderNav();
   if (cur === 'todo') return renderTodo();
   if (cur === 'inbox') return renderInbox();
+  if (cur === 'content') return renderContent();
   if (cur === 'reports') return renderReports();
   if (cur === 'users') return renderUsers();
   if (cur === 'stats') return renderStats();
@@ -301,6 +303,363 @@ async function sendReply() {
   const idx = inboxConversations.findIndex(c => c.user_id === currentChat.user_id && c.character_id === currentChat.character_id);
   await renderInbox();
   if (idx >= 0) openChat(idx);
+}
+
+// ===== 内容管理 =====
+let contentSubTab = 'main';   // main | forum | hotsearch
+let contentFilter = '';        // 角色 handle 或 阵营名，空=全部
+
+async function renderContent() {
+  const root = $('#admin-app');
+  root.innerHTML = `
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn ${contentSubTab==='main'?'btn-primary':''}" onclick="switchContentTab('main')">📝 主页帖子</button>
+        <button class="btn ${contentSubTab==='forum'?'btn-primary':''}" onclick="switchContentTab('forum')">⚔️ 论坛帖子</button>
+        <button class="btn ${contentSubTab==='hotsearch'?'btn-primary':''}" onclick="switchContentTab('hotsearch')">🔥 热搜</button>
+      </div>
+    </div>
+    <div id="content-body"></div>
+  `;
+  if (contentSubTab === 'main') return renderMainPosts();
+  if (contentSubTab === 'forum') return renderForumPosts();
+  if (contentSubTab === 'hotsearch') return renderHotsearchEdit();
+}
+
+function switchContentTab(tab) {
+  contentSubTab = tab;
+  contentFilter = '';
+  renderContent();
+}
+
+// ===== 主页帖子 =====
+async function renderMainPosts() {
+  const body = $('#content-body');
+  body.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">加载中…</div>';
+
+  const { data: posts, error } = await db.from('posts')
+    .select('id, character, date, content, faction, post_type')
+    .eq('post_type', 'main')
+    .order('date', { ascending: false });
+
+  if (error) { body.innerHTML = '<div class="empty">加载失败：' + esc(error.message) + '</div>'; return; }
+
+  // 按角色分组
+  const grouped = {};
+  (posts || []).forEach(p => {
+    if (!grouped[p.character]) grouped[p.character] = [];
+    grouped[p.character].push(p);
+  });
+
+  const allChars = Object.keys(grouped).sort();
+
+  body.innerHTML = `
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:13px;color:var(--muted);">角色：</span>
+        <button class="btn ${contentFilter===''?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('')">全部</button>
+        ${allChars.map(h => {
+          const c = CHARACTERS[h] || {};
+          return `<button class="btn ${contentFilter===h?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${h}')">${esc(c.name || h)}</button>`;
+        }).join('')}
+      </div>
+    </div>
+    <div id="content-list">
+      ${renderMainPostsList(grouped)}
+    </div>
+  `;
+}
+
+function filterContent(handle) {
+  contentFilter = handle;
+  renderContent();
+}
+
+function renderMainPostsList(grouped) {
+  const keys = contentFilter ? [contentFilter] : Object.keys(grouped);
+  if (!keys.length) return '<div class="card"><div class="empty">还没有帖子</div></div>';
+
+  return keys.map(handle => {
+    const c = CHARACTERS[handle] || { name: handle };
+    const list = grouped[handle] || [];
+    if (!list.length) return '';
+    return `
+      <div class="card" style="padding:12px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:15px;">
+            ${factionIcon(c.faction)} ${esc(c.name)} <span style="font-size:12px;color:var(--muted);font-weight:400;">(@${esc(handle)} · ${list.length} 条)</span>
+          </div>
+          <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="openPostEditor('', '${handle}', 'main')">+ 新建</button>
+        </div>
+        ${list.map(p => `
+          <div style="padding:10px;border-radius:8px;background:var(--bg);margin-bottom:6px;cursor:pointer;" onclick="openPostEditor('${p.id}', '', 'main')">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">${esc(p.date || '')}</div>
+            <div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(p.content.slice(0, 100))}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== 论坛帖子（先做列表，编辑功能跟主页一样）=====
+async function renderForumPosts() {
+  const body = $('#content-body');
+  body.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">加载中…</div>';
+
+  const { data: posts, error } = await db.from('posts')
+    .select('id, character, date, content, faction, post_type')
+    .eq('post_type', 'forum')
+    .order('date', { ascending: false });
+
+  if (error) { body.innerHTML = '<div class="empty">加载失败：' + esc(error.message) + '</div>'; return; }
+
+  const grouped = {};
+  (posts || []).forEach(p => {
+    if (!grouped[p.faction]) grouped[p.faction] = [];
+    grouped[p.faction].push(p);
+  });
+
+  const allFactions = ['精灵', '矮人', '人类', '异人', '240', '246', '240-1'];
+
+  body.innerHTML = `
+    <div class="card" style="padding:12px 16px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:13px;color:var(--muted);">阵营：</span>
+        <button class="btn ${contentFilter===''?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('')">全部</button>
+        ${allFactions.map(f => `<button class="btn ${contentFilter===f?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${f}')">${factionIcon(f)} ${f}</button>`).join('')}
+      </div>
+    </div>
+    <div id="content-list">
+      ${renderForumPostsList(grouped, allFactions)}
+    </div>
+  `;
+}
+
+function renderForumPostsList(grouped, allFactions) {
+  const keys = contentFilter ? [contentFilter] : allFactions;
+  return keys.map(f => {
+    const list = grouped[f] || [];
+    if (!list.length && contentFilter !== f) return '';
+    return `
+      <div class="card" style="padding:12px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:15px;">
+            ${factionIcon(f)} ${esc(f)} 论坛 <span style="font-size:12px;color:var(--muted);font-weight:400;">(${list.length} 条)</span>
+          </div>
+          <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="openPostEditor('', '', 'forum', '${f}')">+ 新建</button>
+        </div>
+        ${list.length === 0 ? '<div style="font-size:13px;color:var(--muted);">暂无帖子</div>' : list.map(p => `
+          <div style="padding:10px;border-radius:8px;background:var(--bg);margin-bottom:6px;cursor:pointer;" onclick="openPostEditor('${p.id}', '', 'forum')">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">${esc(p.date || '')} · @${esc(p.character)}</div>
+            <div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(p.content.slice(0, 100))}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== 热搜编辑 =====
+async function renderHotsearchEdit() {
+  const body = $('#content-body');
+  body.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">加载中…</div>';
+
+  const { data, error } = await db.from('hotsearch').select('*').order('faction').order('rank');
+  if (error) { body.innerHTML = '<div class="empty">加载失败：' + esc(error.message) + '</div>'; return; }
+
+  const byFaction = {};
+  (data || []).forEach(r => {
+    if (!byFaction[r.faction]) byFaction[r.faction] = [];
+    byFaction[r.faction].push(r);
+  });
+
+  const factions = ['精灵', '矮人', '人类', '异人', '240'];
+
+  body.innerHTML = factions.map(f => {
+    const list = byFaction[f] || [
+      { id: '', rank: 1, text: '', url: '' },
+      { id: '', rank: 2, text: '', url: '' },
+      { id: '', rank: 3, text: '', url: '' },
+    ];
+    return `
+      <div class="card" id="hot-card-${f}">
+        <div style="font-weight:700;margin-bottom:12px;">${factionIcon(f)} ${esc(f)} 热搜</div>
+        ${[1, 2, 3].map(rank => {
+          const item = list.find(x => x.rank === rank) || { text: '', url: '' };
+          return `
+            <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+              <span style="width:24px;font-weight:700;color:var(--muted);">${rank}</span>
+              <input class="hot-text-${f}-${rank}" type="text" value="${esc(item.text)}" placeholder="热搜文字" style="flex:2;padding:8px;border:1px solid var(--border);border-radius:8px;">
+              <input class="hot-url-${f}-${rank}" type="text" value="${esc(item.url)}" placeholder="跳转链接（可选）" style="flex:2;padding:8px;border:1px solid var(--border);border-radius:8px;">
+            </div>
+          `;
+        }).join('')}
+        <button class="btn btn-primary" style="margin-top:4px;" onclick="saveHotsearch('${f}')">保存 ${esc(f)} 热搜</button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function saveHotsearch(faction) {
+  const items = [];
+  for (const rank of [1, 2, 3]) {
+    const text = document.querySelector(`.hot-text-${faction}-${rank}`).value.trim();
+    const url = document.querySelector(`.hot-url-${faction}-${rank}`).value.trim();
+    if (text) items.push({ faction, rank, text, url });
+  }
+
+  await db.from('hotsearch').delete().eq('faction', faction);
+  if (items.length) {
+    const { error } = await db.from('hotsearch').insert(items);
+    if (error) return showToast('保存失败：' + error.message);
+  }
+  showToast(faction + ' 热搜已保存');
+}
+
+// ===== 帖子编辑器 =====
+async function openPostEditor(postId, characterHandle, postType, defaultFaction) {
+  let post = null;
+  if (postId) {
+    const { data } = await db.from('posts').select('*').eq('id', postId).single();
+    post = data;
+  }
+
+  const isNew = !post;
+  const p = post || {
+    id: '',
+    character: characterHandle || '',
+    date: new Date().toISOString().slice(0, 10),
+    tags: [],
+    location: '',
+    images: [],
+    content: '',
+    post_type: postType || 'main',
+    faction: defaultFaction || '',
+  };
+
+  const modal = document.createElement('div');
+  modal.id = 'post-editor-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;padding:20px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="background:#fff;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;box-sizing:border-box;">
+      <h3 style="margin-bottom:16px;">${isNew ? '新建' : '编辑'} ${p.post_type === 'forum' ? '论坛' : '主页'}帖子</h3>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--muted);">帖子 ID</label>
+          <input id="pe-id" type="text" value="${esc(p.id)}" ${isNew ? '' : 'disabled'} placeholder="如 2026-10-15-001" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">角色 handle</label>
+          <input id="pe-character" type="text" value="${esc(p.character)}" placeholder="如 daniel / tt" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--muted);">日期</label>
+          <input id="pe-date" type="text" value="${esc(p.date)}" placeholder="YYYY-MM-DD" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">地点</label>
+          <input id="pe-location" type="text" value="${esc(p.location)}" placeholder="如 红叶镇" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--muted);">标签（英文逗号分隔）</label>
+        <input id="pe-tags" type="text" value="${esc((p.tags || []).join(','))}" placeholder="日常,公告" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--muted);">图片路径（英文逗号分隔）</label>
+        <input id="pe-images" type="text" value="${esc((p.images || []).join(','))}" placeholder="images/posts/b-1.webp" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+      </div>
+
+      ${p.post_type === 'forum' ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label style="font-size:12px;color:var(--muted);">阵营</label>
+            <input id="pe-faction" type="text" value="${esc(p.faction)}" placeholder="精灵/矮人/人类/异人/240/246/240-1" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--muted);">节日（可空）</label>
+            <input id="pe-event" type="text" value="${esc(p.event)}" placeholder="如 月亮节" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+          </div>
+        </div>
+      ` : ''}
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;color:var(--muted);">正文（Markdown）</label>
+        <textarea id="pe-content" rows="12" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:4px;font-family:monospace;font-size:13px;resize:vertical;">${esc(p.content)}</textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="savePost('${isNew ? 'new' : 'edit'}', '${esc(p.post_type)}')">保存</button>
+        ${!isNew ? `<button class="btn" style="border-color:#dc3545;color:#dc3545;" onclick="deletePost('${esc(p.id)}')">删除帖子</button>` : ''}
+        <button class="btn" onclick="document.getElementById('post-editor-modal').remove()">取消</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+async function savePost(mode, postType) {
+  const id = document.querySelector('#pe-id').value.trim();
+  const character = document.querySelector('#pe-character').value.trim();
+  const date = document.querySelector('#pe-date').value.trim();
+  const location = document.querySelector('#pe-location').value.trim();
+  const tagsRaw = document.querySelector('#pe-tags').value.trim();
+  const imagesRaw = document.querySelector('#pe-images').value.trim();
+  const content = document.querySelector('#pe-content').value;
+  const factionEl = document.querySelector('#pe-faction');
+  const eventEl = document.querySelector('#pe-event');
+
+  if (!id) return showToast('请填写帖子 ID');
+  if (!character) return showToast('请填写角色 handle');
+  if (!content.trim()) return showToast('正文不能为空');
+
+  const tags = tagsRaw ? tagsRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
+  const images = imagesRaw ? imagesRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
+
+  const payload = {
+    id,
+    character,
+    date,
+    location,
+    tags,
+    images,
+    content,
+    post_type: postType || 'main',
+    faction: factionEl ? factionEl.value.trim() : '',
+    event: eventEl ? eventEl.value.trim() : '',
+  };
+
+  let err;
+  if (mode === 'new') {
+    const { error } = await db.from('posts').insert(payload);
+    err = error;
+  } else {
+    const { error } = await db.from('posts').update(payload).eq('id', id);
+    err = error;
+  }
+
+  if (err) return showToast('保存失败：' + err.message);
+  showToast('已保存');
+  document.getElementById('post-editor-modal').remove();
+  sessionStorage.removeItem('talk_data_cache_v2');
+  renderContent();
+}
+
+async function deletePost(postId) {
+  if (!confirm('确定删除帖子 ' + postId + ' 吗？此操作不可恢复。')) return;
+  const { error } = await db.from('posts').delete().eq('id', postId);
+  if (error) return showToast('删除失败：' + error.message);
+  showToast('已删除');
+  document.getElementById('post-editor-modal').remove();
+  sessionStorage.removeItem('talk_data_cache_v2');
+  renderContent();
 }
 
 // ===== 举报处理 =====
