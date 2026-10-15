@@ -925,7 +925,7 @@ async function toggleBookmark(postId, btn) {
 async function loadComments(postId) {
   const list = document.getElementById(`comments-list-${postId}`);
   list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
-  const { data, error } = await db.from('comments').select('id, content, created_at, user_id, parent_id').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
+  const { data, error } = await db.from('comments').select('id, content, created_at, user_id, parent_id, as_character').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
   if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
 
@@ -948,6 +948,10 @@ async function loadComments(postId) {
   }
 
   const roots = data.filter(c => !c.parent_id);
+    // 区分：角色评论 vs 用户评论
+  const charComments = data.filter(c => c.as_character);
+  const charHandles = [...new Set(charComments.map(c => c.as_character))];
+  // CHARACTERS 已经在全局加载了，直接用
   const repliesMap = {};
   data.filter(c => c.parent_id).forEach(c => {
     if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
@@ -955,18 +959,30 @@ async function loadComments(postId) {
   });
 
   const renderOne = (c, isReply) => {
-    const p = profileMap[c.user_id] || {};
-    const isMe = currentUser && c.user_id === currentUser.id;
-    const displayName = p.username || '匿名旅者';
-    const nameHTML = isMe
-      ? `<b>${displayName.replace(/</g,'&lt;')}</b>`
-      : `<a href="user.html?id=${c.user_id}" style="color:var(--primary-dark);font-weight:600;">${displayName.replace(/</g,'&lt;')}</a>`;
-    const avatarHTMLSmall = userAvatarHTML(p, 24);
-    const factionIconHTML = p.faction ? factionIcon(p.faction) + ' ' : '';
+    let displayName, nameHTML, avatarHTMLSmall, factionIconHTML;
+
+    if (c.as_character) {
+      // 角色身份评论
+      const ch = CHARACTERS[c.as_character] || { name: c.as_character, handle: c.as_character };
+      displayName = ch.name;
+      nameHTML = `<a href="character.html?handle=${ch.handle}" style="color:var(--primary-dark);font-weight:600;">${displayName.replace(/</g,'&lt;')}</a>${ch.verified ? ` <span class="verified">✓ ${ch.verified}</span>` : ''}`;
+      avatarHTMLSmall = avatarHTML(ch);
+      factionIconHTML = ch.faction ? factionIcon(ch.faction) + ' ' : '';
+    } else {
+      // 普通用户评论
+      const p = profileMap[c.user_id] || {};
+      const isMe = currentUser && c.user_id === currentUser.id;
+      displayName = p.username || '匿名旅者';
+      nameHTML = isMe
+        ? `<b>${displayName.replace(/</g,'&lt;')}</b>`
+        : `<a href="user.html?id=${c.user_id}" style="color:var(--primary-dark);font-weight:600;">${displayName.replace(/</g,'&lt;')}</a>`;
+      avatarHTMLSmall = userAvatarHTML(p, 24);
+      factionIconHTML = p.faction ? factionIcon(p.faction) + ' ' : '';
+    }
 
     const count = likeCounts[c.id] || 0;
     const liked = !!likedByMe[c.id];
-    const canDelete = isMe;
+    const canDelete = !c.as_character && currentUser && c.user_id === currentUser.id;
     return `
       <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
@@ -978,8 +994,8 @@ async function loadComments(postId) {
           <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
             <span class="heart-icon">${liked ? '♥' : '♡'}</span> <span class="like-count">${count}</span>
           </button>
-          <button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>
-          <button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>
+          ${!c.as_character ? `<button onclick="showReplyBox('${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">回复</button>` : ''}
+          ${!c.as_character ? `<button onclick="openReportModal('comment', '${c.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">举报</button>` : ''}
           ${canDelete ? `<button onclick="deleteOwnComment('${c.id}', '${postId}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit;padding:0;">删除</button>` : ''}
         </div>
         <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
@@ -991,7 +1007,7 @@ async function loadComments(postId) {
       </div>
     `;
   };
-
+  
   let html = '';
   roots.forEach(c => {
     html += renderOne(c, false);
