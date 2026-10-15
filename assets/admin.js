@@ -812,14 +812,25 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
 }
 
 async function savePost(mode, postType) {
-  const id = document.querySelector('#pe-id').value.trim();
-  const character = document.querySelector('#pe-character').value.trim();
-  const date = document.querySelector('#pe-date').value.trim();
-  const location = document.querySelector('#pe-location').value.trim();
-  const tagsRaw = document.querySelector('#pe-tags').value.trim();
-  const content = document.querySelector('#pe-content').value;
-  const factionEl = document.querySelector('#pe-faction');
-  const eventEl = document.querySelector('#pe-event');
+  const $id = document.querySelector('#pe-id');
+  const $char = document.querySelector('#pe-character');
+  const $date = document.querySelector('#pe-date');
+  const $loc = document.querySelector('#pe-location');
+  const $tags = document.querySelector('#pe-tags');
+  const $content = document.querySelector('#pe-content');
+  const $faction = document.querySelector('#pe-faction');
+  const $event = document.querySelector('#pe-event');
+
+  if (!$id || !$char || !$content) return showToast('表单异常，请关闭重开');
+
+  const id = $id.value.trim();
+  const character = $char.value.trim();
+  const date = $date ? $date.value.trim() : '';
+  const location = $loc ? $loc.value.trim() : '';
+  const tagsRaw = $tags ? $tags.value.trim() : '';
+  const content = $content.value;
+  const faction = $faction ? $faction.value.trim() : '';
+  const event = $event ? $event.value.trim() : '';
 
   if (!id) return showToast('请填写帖子 ID');
   if (!character) return showToast('请填写角色 handle');
@@ -837,8 +848,8 @@ async function savePost(mode, postType) {
     images,
     content,
     post_type: postType || 'main',
-    faction: factionEl ? factionEl.value.trim() : '',
-    event: eventEl ? eventEl.value.trim() : '',
+    faction,
+    event,
   };
 
   let err;
