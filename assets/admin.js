@@ -81,6 +81,7 @@ function renderNav() {
     { key: 'todo', icon: '📋', text: '待办' },
     { key: 'inbox', icon: '✉️', text: '私信' },
     { key: 'content', icon: '📝', text: '内容' },
+    { key: 'characters', icon: '🎭', text: '角色' },
     { key: 'reports', icon: '🚨', text: '举报' },
     { key: 'users', icon: '👥', text: '用户' },
     { key: 'stats', icon: '📊', text: '数据' },
@@ -99,6 +100,7 @@ async function router() {
   if (cur === 'todo') return renderTodo();
   if (cur === 'inbox') return renderInbox();
   if (cur === 'content') return renderContent();
+  if (cur === 'characters') return renderCharacters();
   if (cur === 'reports') return renderReports();
   if (cur === 'users') return renderUsers();
   if (cur === 'stats') return renderStats();
@@ -303,6 +305,373 @@ async function sendReply() {
   const idx = inboxConversations.findIndex(c => c.user_id === currentChat.user_id && c.character_id === currentChat.character_id);
   await renderInbox();
   if (idx >= 0) openChat(idx);
+}
+
+// ===== 角色管理 =====
+let _charAvatarTmp = '';
+let _charFollowsTmp = [];
+let _charLikesTmp = [];
+let _charBookmarksTmp = [];
+let _charBannerTmp = '';
+
+let _allPostsCache = [];
+
+async function renderCharacters() {
+  const root = $('#admin-app');
+  root.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">加载中…</div>';
+
+  const [charsRes, postsRes] = await Promise.all([
+    db.from('characters').select('*').order('created_at'),
+    db.from('posts').select('id, content, character').order('date', { ascending: false }).limit(500)
+  ]);
+
+  if (charsRes.error) { root.innerHTML = '<div class="empty">加载失败：' + esc(charsRes.error.message) + '</div>'; return; }
+
+  const data = charsRes.data;
+  _allPostsCache = postsRes.data || [];
+
+  root.innerHTML = `
+    <div class="card" style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;">角色管理</h3>
+      <button class="btn btn-primary" onclick="openCharacterEditor(null)">+ 新建角色</button>
+    </div>
+    ${(data || []).length === 0 ? '<div class="card"><div class="empty">还没有角色</div></div>' :
+      (data || []).map(c => {
+        const initial = (c.name || '?').slice(0, 1);
+        const fac = c.faction ? factionIcon(c.faction) + ' ' + c.faction : '中立';
+        return `
+          <div class="card" style="display:flex;align-items:center;gap:12px;">
+            ${c.avatar
+              ? `<img src="${esc(c.avatar)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+              : `<div style="width:44px;height:44px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc(initial)}</div>`}
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-size:14px;">
+                ${esc(c.name)}
+                ${c.verified ? `<span class="verified">✓ ${esc(c.verified)}</span>` : ''}
+                ${c.is_npc ? '<span style="font-size:11px;background:var(--primary-light);color:var(--primary-dark);padding:1px 6px;border-radius:10px;margin-left:6px;">NPC</span>' : ''}
+              </div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px;">@${esc(c.handle)} · ${fac} · ${c.base_followers || 0} 粉丝</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn" style="font-size:12px;padding:4px 10px;" onclick='openCharacterEditor(${JSON.stringify(JSON.stringify(c))})'>编辑</button>
+              <button class="btn" style="font-size:12px;padding:4px 10px;border-color:#dc3545;color:#dc3545;" onclick="deleteCharacter('${esc(c.handle)}')">删除</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+  `;
+}
+
+function openCharacterEditor(jsonStr) {
+  let c = null;
+  if (jsonStr) {
+    const raw = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+    c = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  }
+
+  const isNew = !c;
+  const p = c || {
+    handle: '', name: '', name_en: '', avatar: '', banner: '', bio: '',
+    base_followers: 0, following: 0, location: '', verified: '', faction: '',
+    is_npc: false, privacy: { follows: true, likes: true, bookmarks: true }
+  };
+
+  _charAvatarTmp = p.avatar || '';
+  _charBannerTmp = p.banner || '';
+  _charFollowsTmp = [...(p.follows_list || [])];
+  _charLikesTmp = [...(p.likes_list || [])];
+  _charBookmarksTmp = [...(p.bookmarks_list || [])];
+  const privacy = p.privacy || { follows: true, likes: true, bookmarks: true };
+
+  const modal = document.createElement('div');
+  modal.id = 'character-editor-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;padding:20px;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="background:#fff;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;box-sizing:border-box;">
+      <h3 style="margin-bottom:16px;">${isNew ? '新建角色' : '编辑角色 · ' + esc(p.name)}</h3>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;color:var(--muted);">背景图（Banner）</label>
+        <div style="margin-top:6px;">
+          <div id="ce-banner-box" style="width:100%;height:120px;border-radius:8px;background:${_charBannerTmp ? `url('${esc(_charBannerTmp)}') center/cover` : 'var(--bg)'};border:1px solid var(--border);"></div>
+          <div style="margin-top:6px;display:flex;gap:6px;">
+            <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="pickCharacterImage('banner')">更换背景</button>
+            <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="clearCharacterImage('banner')">清除</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;color:var(--muted);">头像</label>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:10px;">
+          <div id="ce-avatar-box" style="width:72px;height:72px;border-radius:50%;overflow:hidden;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;">
+            ${_charAvatarTmp ? `<img src="${esc(_charAvatarTmp)}" style="width:100%;height:100%;object-fit:cover;">` : '<span style="color:var(--muted);font-size:12px;">无</span>'}
+          </div>
+          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="pickCharacterImage('avatar')">更换头像</button>
+          <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="clearCharacterImage('avatar')">清除</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--muted);">handle（唯一标识，英文小写）</label>
+          <input id="ce-handle" type="text" value="${esc(p.handle)}" ${isNew ? '' : 'disabled'} placeholder="如 daniel" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;${isNew ? '' : 'background:#f5f5f5;'}">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">名字</label>
+          <input id="ce-name" type="text" value="${esc(p.name)}" placeholder="如 布兰森·丹尼尔" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--muted);">英文名</label>
+          <input id="ce-name-en" type="text" value="${esc(p.name_en)}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">认证文字（留空=不认证）</label>
+          <input id="ce-verified" type="text" value="${esc(p.verified)}" placeholder="如 高级福灵" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--muted);">阵营（留空=中立）</label>
+          <select id="ce-faction" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#fff;">
+            <option value="" ${p.faction === '' ? 'selected' : ''}>中立</option>
+            <option value="精灵" ${p.faction === '精灵' ? 'selected' : ''}>🦌 精灵</option>
+            <option value="矮人" ${p.faction === '矮人' ? 'selected' : ''}>⚒️ 矮人</option>
+            <option value="人类" ${p.faction === '人类' ? 'selected' : ''}>⭐ 人类</option>
+            <option value="异人" ${p.faction === '异人' ? 'selected' : ''}>🌲 异人</option>
+            <option value="240" ${p.faction === '240' ? 'selected' : ''}>⚖️ 240</option>
+            <option value="246" ${p.faction === '246' ? 'selected' : ''}>🔳 246</option>
+            <option value="240-1" ${p.faction === '240-1' ? 'selected' : ''}>💥 240-1</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">地点</label>
+          <input id="ce-location" type="text" value="${esc(p.location)}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:12px;color:var(--muted);">基础粉丝数</label>
+          <input id="ce-followers" type="number" value="${p.base_followers || 0}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">是否 NPC</label>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:14px;">
+            <input id="ce-is-npc" type="checkbox" ${p.is_npc ? 'checked' : ''}> 是 NPC（不参与用户互动）
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;color:var(--muted);">简介</label>
+        <textarea id="ce-bio" rows="3" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;font-family:inherit;resize:vertical;">${esc(p.bio)}</textarea>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;color:var(--muted);">隐私设置（是否公开）</label>
+        <div style="display:flex;gap:16px;margin-top:8px;font-size:14px;">
+          <label><input type="checkbox" id="ce-p-follows" ${privacy.follows ? 'checked' : ''}> 关注列表</label>
+          <label><input type="checkbox" id="ce-p-likes" ${privacy.likes ? 'checked' : ''}> 点赞列表</label>
+          <label><input type="checkbox" id="ce-p-bookmarks" ${privacy.bookmarks ? 'checked' : ''}> 收藏列表</label>
+        </div>
+      </div>
+
+      <details style="margin-bottom:12px;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;">关注列表 <span id="ce-follows-count" style="color:var(--muted);font-weight:400;">(${_charFollowsTmp.length})</span></summary>
+        <input type="text" placeholder="搜索角色…" oninput="filterList('ce-follows-list', this.value)" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;margin:8px 0 6px;font-size:13px;box-sizing:border-box;">
+        <div id="ce-follows-list" style="max-height:240px;overflow-y:auto;">
+          ${Object.values(CHARACTERS).filter(c => c.handle !== p.handle).map(c => `
+            <label style="display:flex;align-items:center;gap:8px;padding:4px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" ${_charFollowsTmp.includes(c.handle) ? 'checked' : ''} onchange="toggleFollowItem('${c.handle}', this.checked)">
+              ${factionIcon(c.faction)} ${esc(c.name)} <span style="color:var(--muted);font-size:11px;">@${esc(c.handle)}</span>
+            </label>
+          `).join('') || '<div style="font-size:13px;color:var(--muted);">没有其他角色</div>'}
+        </div>
+      </details>
+
+      <details style="margin-bottom:12px;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;">点赞列表 <span id="ce-likes-count" style="color:var(--muted);font-weight:400;">(${_charLikesTmp.length})</span></summary>
+        <input type="text" placeholder="搜索帖子…" oninput="filterList('ce-likes-list', this.value)" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;margin:8px 0 6px;font-size:13px;box-sizing:border-box;">
+        <div id="ce-likes-list" style="max-height:240px;overflow-y:auto;">
+          ${_allPostsCache.map(p2 => {
+            const ch = CHARACTERS[p2.character] || { name: p2.character };
+            const preview = p2.content.slice(0, 60).replace(/\n/g, ' ');
+            return `
+              <label style="display:flex;align-items:flex-start;gap:8px;padding:4px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" ${_charLikesTmp.includes(p2.id) ? 'checked' : ''} onchange="toggleLikeItem('${p2.id}', this.checked)" style="margin-top:3px;">
+                <span><b>${esc(ch.name)}</b> · ${esc(preview)}</span>
+              </label>
+            `;
+          }).join('') || '<div style="font-size:13px;color:var(--muted);">没有帖子</div>'}
+        </div>
+      </details>
+
+      <details style="margin-bottom:12px;padding:10px;border:1px solid var(--border);border-radius:8px;">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px;">收藏列表 <span id="ce-bookmarks-count" style="color:var(--muted);font-weight:400;">(${_charBookmarksTmp.length})</span></summary>
+        <input type="text" placeholder="搜索帖子…" oninput="filterList('ce-bookmarks-list', this.value)" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;margin:8px 0 6px;font-size:13px;box-sizing:border-box;">
+        <div id="ce-bookmarks-list" style="max-height:240px;overflow-y:auto;">
+          ${_allPostsCache.map(p2 => {
+            const ch = CHARACTERS[p2.character] || { name: p2.character };
+            const preview = p2.content.slice(0, 60).replace(/\n/g, ' ');
+            return `
+              <label style="display:flex;align-items:flex-start;gap:8px;padding:4px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" ${_charBookmarksTmp.includes(p2.id) ? 'checked' : ''} onchange="toggleBookmarkItem('${p2.id}', this.checked)" style="margin-top:3px;">
+                <span><b>${esc(ch.name)}</b> · ${esc(preview)}</span>
+              </label>
+            `;
+          }).join('') || '<div style="font-size:13px;color:var(--muted);">没有帖子</div>'}
+        </div>
+      </details>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="saveCharacter('${isNew ? 'new' : 'edit'}')">保存</button>
+        <button class="btn" onclick="document.getElementById('character-editor-modal').remove()">取消</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function pickCharacterImage(type) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const maxW = type === 'avatar' ? 400 : 1200;
+      const maxH = type === 'avatar' ? 400 : 400;
+      const blob = await compressImage(file, maxW, maxH, 0.8);
+      const path = `characters/${type}s/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
+      const { error } = await db.storage.from('post-images').upload(path, blob, { contentType: 'image/webp' });
+      if (error) throw error;
+      const { data: { publicUrl } } = db.storage.from('post-images').getPublicUrl(path);
+      if (type === 'avatar') {
+        _charAvatarTmp = publicUrl;
+        document.getElementById('ce-avatar-box').innerHTML = `<img src="${esc(publicUrl)}" style="width:100%;height:100%;object-fit:cover;">`;
+      } else {
+        _charBannerTmp = publicUrl;
+        document.getElementById('ce-banner-box').style.background = `url('${publicUrl}') center/cover`;
+      }
+      showToast('已上传');
+    } catch (e) {
+      showToast('上传失败：' + (e.message || '未知错误'));
+    }
+  };
+  input.click();
+}
+
+function clearCharacterImage(type) {
+  if (type === 'avatar') {
+    _charAvatarTmp = '';
+    document.getElementById('ce-avatar-box').innerHTML = '<span style="color:var(--muted);font-size:12px;">无</span>';
+  } else {
+    _charBannerTmp = '';
+    document.getElementById('ce-banner-box').style.background = 'var(--bg)';
+  }
+}
+
+function toggleFollowItem(handle, checked) {
+  if (checked) {
+    if (!_charFollowsTmp.includes(handle)) _charFollowsTmp.push(handle);
+  } else {
+    _charFollowsTmp = _charFollowsTmp.filter(h => h !== handle);
+  }
+  document.getElementById('ce-follows-count').textContent = '(' + _charFollowsTmp.length + ')';
+}
+
+function toggleLikeItem(postId, checked) {
+  if (checked) {
+    if (!_charLikesTmp.includes(postId)) _charLikesTmp.push(postId);
+  } else {
+    _charLikesTmp = _charLikesTmp.filter(id => id !== postId);
+  }
+  document.getElementById('ce-likes-count').textContent = '(' + _charLikesTmp.length + ')';
+}
+
+function toggleBookmarkItem(postId, checked) {
+  if (checked) {
+    if (!_charBookmarksTmp.includes(postId)) _charBookmarksTmp.push(postId);
+  } else {
+    _charBookmarksTmp = _charBookmarksTmp.filter(id => id !== postId);
+  }
+  document.getElementById('ce-bookmarks-count').textContent = '(' + _charBookmarksTmp.length + ')';
+}
+
+function filterList(listId, q) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  const lower = q.toLowerCase();
+  list.querySelectorAll('label').forEach(lbl => {
+    lbl.style.display = lbl.textContent.toLowerCase().includes(lower) ? '' : 'none';
+  });
+}
+
+async function saveCharacter(mode) {
+  const handle = document.querySelector('#ce-handle').value.trim();
+  const name = document.querySelector('#ce-name').value.trim();
+  if (!handle) return showToast('请填写 handle');
+  if (!name) return showToast('请填写名字');
+  if (!/^[a-z0-9\-]+$/.test(handle)) return showToast('handle 只能用小写字母、数字、短横线');
+
+  const payload = {
+    handle,
+    name,
+    name_en: document.querySelector('#ce-name-en').value.trim(),
+    avatar: _charAvatarTmp,
+    banner: _charBannerTmp,
+    bio: document.querySelector('#ce-bio').value,
+    base_followers: parseInt(document.querySelector('#ce-followers').value) || 0,
+    location: document.querySelector('#ce-location').value.trim(),
+    verified: document.querySelector('#ce-verified').value.trim(),
+    faction: document.querySelector('#ce-faction').value,
+    is_npc: document.querySelector('#ce-is-npc').checked,
+    privacy: {
+      follows: document.querySelector('#ce-p-follows').checked,
+      likes: document.querySelector('#ce-p-likes').checked,
+      bookmarks: document.querySelector('#ce-p-bookmarks').checked
+    },
+    follows_list: _charFollowsTmp,
+    likes_list: _charLikesTmp,
+    bookmarks_list: _charBookmarksTmp,
+  };
+
+  let err;
+  if (mode === 'new') {
+    const { error } = await db.from('characters').insert(payload);
+    err = error;
+  } else {
+    const { error } = await db.from('characters').update(payload).eq('handle', handle);
+    err = error;
+  }
+
+  if (err) return showToast('保存失败：' + err.message);
+  showToast('已保存');
+  document.getElementById('character-editor-modal').remove();
+  sessionStorage.removeItem('talk_data_cache_v2');
+  localStorage.setItem('talk_data_version', Date.now().toString());
+  renderCharacters();
+}
+
+async function deleteCharacter(handle) {
+  const { count: postCount } = await db.from('posts').select('*', { count: 'exact', head: true }).eq('character', handle);
+  const msg = (postCount > 0)
+    ? `该角色有 ${postCount} 条帖子，删除后这些帖子的作者会显示成未知角色。\n\n确定删除「${handle}」吗？`
+    : `确定删除角色「${handle}」吗？`;
+  if (!confirm(msg)) return;
+
+  const { error } = await db.from('characters').delete().eq('handle', handle);
+  if (error) return showToast('删除失败：' + error.message);
+  showToast('已删除');
+  sessionStorage.removeItem('talk_data_cache_v2');
+  localStorage.setItem('talk_data_version', Date.now().toString());
+  renderCharacters();
 }
 
 // ===== 内容管理 =====
