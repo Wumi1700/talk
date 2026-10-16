@@ -911,6 +911,9 @@ async function saveHotsearch(faction) {
 
 // ===== 评论管理面板 =====
 async function openCommentsPanel(postId) {
+  let replyToId = null; // 当前正在回复的评论 id
+  let filterMode = 'all'; // all | role | user
+
   const modal = document.createElement('div');
   modal.id = 'comments-panel-modal';
   modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;padding:20px;box-sizing:border-box;';
@@ -929,14 +932,81 @@ async function openCommentsPanel(postId) {
       return;
     }
 
-    const userIds = [...new Set((comments || []).filter(c => !c.as_character).map(c => c.user_id))];
+    const userIds = [...new Set((comments || []).filter(c => !c.as_character && c.user_id).map(c => c.user_id))];
     const profileMap = {};
     if (userIds.length) {
       const { data: profs } = await db.from('profiles').select('id, username').in('id', userIds);
       (profs || []).forEach(p => { profileMap[p.id] = p; });
     }
 
-    const visible = (comments || []).filter(c => c.status !== 'hidden');
+    // 筛选
+    let visible = (comments || []).filter(c => c.status !== 'hidden');
+    if (filterMode === 'role') visible = visible.filter(c => c.as_character);
+    if (filterMode === 'user') visible = visible.filter(c => !c.as_character);
+
+    const allVisible = (comments || []).filter(c => c.status !== 'hidden');
+    const hiddenCount = (comments || []).length - allVisible.length;
+
+    // 构建树
+    const roots = visible.filter(c => !c.parent_id);
+    const repliesMap = {};
+    visible.filter(c => c.parent_id).forEach(c => {
+      if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
+      repliesMap[c.parent_id].push(c);
+    });
+
+    function renderOne(c, isReply) {
+      let name, avatar, isRole = !!c.as_character;
+      if (isRole) {
+        const ch = CHARACTERS[c.as_character] || { name: c.as_character };
+        name = ch.name + '（角色）';
+        avatar = factionIcon(ch.faction) || '🎭';
+      } else {
+        const p = profileMap[c.user_id] || {};
+        name = p.username || '匿名';
+        avatar = '👤';
+      }
+      const hidden = c.status === 'hidden';
+      const isReplying = replyToId === c.id;
+
+      return `
+        <div style="padding:10px;border-radius:8px;background:${hidden ? '#f5c2c7' : (isRole ? '#f3eaff' : 'var(--bg)')};margin-bottom:8px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">
+            ${avatar} ${esc(name)} · ${new Date(c.created_at).toLocaleString('zh-CN')}
+            ${hidden ? ' · <span style="color:#b02a37;">已隐藏</span>' : ''}
+          </div>
+          <div style="font-size:13px;margin-bottom:8px;word-break:break-word;">${esc(c.content)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn" style="font-size:12px;padding:2px 10px;" onclick="adminStartReply('${c.id}')">回复</button>
+            ${hidden
+              ? `<button class="btn" style="font-size:12px;padding:2px 10px;" onclick="adminShowComment('${c.id}')">恢复显示</button>`
+              : `<button class="btn" style="font-size:12px;padding:2px 10px;border-color:#dc3545;color:#dc3545;" onclick="adminHideCommentDirect('${c.id}')">隐藏</button>`}
+            <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#dc3545;color:#dc3545;" onclick="adminDeleteComment('${c.id}')">删除</button>
+          </div>
+          ${isReplying ? `
+            <div style="margin-top:10px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:8px;">
+              <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">以角色身份回复：</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <select id="reply-char-${c.id}" style="padding:6px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:13px;">
+                  ${Object.values(CHARACTERS).map(ch => `<option value="${ch.handle}">${esc(ch.name)}</option>`).join('')}
+                </select>
+                <input id="reply-content-${c.id}" type="text" placeholder="回复内容…" maxlength="500" style="flex:1;min-width:200px;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                <button class="btn btn-primary" style="font-size:13px;" onclick="adminSubmitReply('${postId}', '${c.id}')">发送</button>
+                <button class="btn" style="font-size:13px;" onclick="adminCancelReply()">取消</button>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    let listHTML = '';
+    roots.forEach(c => {
+      listHTML += renderOne(c, false);
+      (repliesMap[c.id] || []).forEach(r => {
+        listHTML += renderOne(r, true);
+      });
+    });
 
     modal.innerHTML = `
       <div style="background:#fff;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;">
@@ -946,7 +1016,7 @@ async function openCommentsPanel(postId) {
         </div>
 
         <div style="padding:12px;background:var(--primary-light);border-radius:8px;margin-bottom:16px;">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px;">以角色身份发评论</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px;">以角色身份发评论（顶层）</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <select id="cm-char-select" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff;">
               ${Object.values(CHARACTERS).map(c => `<option value="${c.handle}">${esc(c.name)}${c.verified ? ' ✓' : ''}</option>`).join('')}
@@ -956,42 +1026,57 @@ async function openCommentsPanel(postId) {
           </div>
         </div>
 
-        <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">全部评论（${visible.length} 条可见，${(comments||[]).length - visible.length} 条已隐藏）</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+          <button class="btn ${filterMode==='all'?'btn-primary':''}" style="font-size:12px;padding:4px 12px;" onclick="adminSetCommentFilter('all')">全部</button>
+          <button class="btn ${filterMode==='role'?'btn-primary':''}" style="font-size:12px;padding:4px 12px;" onclick="adminSetCommentFilter('role')">只看角色</button>
+          <button class="btn ${filterMode==='user'?'btn-primary':''}" style="font-size:12px;padding:4px 12px;" onclick="adminSetCommentFilter('user')">只看用户</button>
+          <span style="font-size:12px;color:var(--muted);margin-left:auto;">${allVisible.length} 条可见 · ${hiddenCount} 条已隐藏</span>
+        </div>
 
-        ${(comments || []).length === 0 ? '<div class="empty">还没有评论</div>' : (comments || []).map(c => {
-          let name, avatar, isRole = !!c.as_character;
-          if (isRole) {
-            const ch = CHARACTERS[c.as_character] || { name: c.as_character };
-            name = ch.name + '（角色）';
-            avatar = factionIcon(ch.faction);
-          } else {
-            const p = profileMap[c.user_id] || {};
-            name = p.username || '匿名';
-            avatar = '👤';
-          }
-          const hidden = c.status === 'hidden';
-          return `
-            <div style="padding:10px;border-radius:8px;background:${hidden ? '#f5c2c7' : 'var(--bg)'};margin-bottom:8px;">
-              <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">
-                ${avatar} ${esc(name)} · ${new Date(c.created_at).toLocaleString('zh-CN')}
-                ${hidden ? ' · <span style="color:#b02a37;">已隐藏</span>' : ''}
-              </div>
-              <div style="font-size:13px;margin-bottom:8px;word-break:break-word;">${esc(c.content)}</div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                ${hidden
-                  ? `<button class="btn" style="font-size:12px;padding:2px 10px;" onclick="adminShowComment('${c.id}')">恢复显示</button>`
-                  : `<button class="btn" style="font-size:12px;padding:2px 10px;border-color:#dc3545;color:#dc3545;" onclick="adminHideCommentDirect('${c.id}')">隐藏</button>`}
-                <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#dc3545;color:#dc3545;" onclick="adminDeleteComment('${c.id}')">删除</button>
-              </div>
-            </div>
-          `;
-        }).join('')}
+        <div id="comments-list-container">
+          ${listHTML || '<div class="empty">没有评论</div>'}
+        </div>
       </div>
     `;
   }
 
-  await refresh();
   window._refreshCommentsPanel = refresh;
+  window._setCommentFilter = (mode) => { filterMode = mode; refresh(); };
+  window._startReply = (id) => { replyToId = id; refresh(); };
+  window._cancelReply = () => { replyToId = null; refresh(); };
+
+  await refresh();
+}
+
+function adminSetCommentFilter(mode) {
+  if (window._setCommentFilter) window._setCommentFilter(mode);
+}
+
+function adminStartReply(commentId) {
+  if (window._startReply) window._startReply(commentId);
+}
+
+function adminCancelReply() {
+  if (window._cancelReply) window._cancelReply();
+}
+
+async function adminSubmitReply(postId, parentId) {
+  const handle = document.querySelector(`#reply-char-${parentId}`).value;
+  const content = document.querySelector(`#reply-content-${parentId}`).value.trim();
+  if (!content) return showToast('请输入回复内容');
+
+  const { error } = await db.from('comments').insert({
+    post_id: postId,
+    user_id: null,
+    content: content,
+    as_character: handle,
+    parent_id: parentId,
+    status: 'visible'
+  });
+
+  if (error) return showToast('回复失败：' + error.message);
+  showToast('已回复');
+  if (window._cancelReply) window._cancelReply();
 }
 
 async function adminPostAsCharacter(postId) {
