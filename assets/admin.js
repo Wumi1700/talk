@@ -67,8 +67,28 @@ async function checkAdmin() {
   currentProfile = profile;
   $('#admin-email').textContent = user.email;
   try {
-    const r = await fetch('data/characters.json');
-    CHARACTERS = await r.json();
+    const { data: chars } = await db.from('characters').select('*');
+    CHARACTERS = {};
+    (chars || []).forEach(c => {
+      CHARACTERS[c.handle] = {
+        handle: c.handle,
+        name: c.name,
+        nameEn: c.name_en || '',
+        avatar: c.avatar || '',
+        banner: c.banner || '',
+        bio: c.bio || '',
+        baseFollowers: c.base_followers || 0,
+        following: c.following || 0,
+        location: c.location || '',
+        verified: c.verified || '',
+        faction: c.faction || '',
+        isNPC: c.is_npc || false,
+        privacy: c.privacy || { follows: true, likes: true, bookmarks: true },
+        follows: c.follows_list || [],
+        likes: c.likes_list || [],
+        bookmarks: c.bookmarks_list || [],
+      };
+    });
   } catch (e) {}
   return true;
 }
@@ -720,7 +740,8 @@ async function renderMainPosts() {
     grouped[p.character].push(p);
   });
 
-  const allChars = Object.keys(grouped).sort();
+  // 关键：以所有角色为准，没帖子的显示 0 条
+  const allChars = Object.keys(CHARACTERS).sort();
 
   body.innerHTML = `
     <div class="card" style="padding:12px 16px;">
@@ -729,12 +750,13 @@ async function renderMainPosts() {
         <button class="btn ${contentFilter===''?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('')">全部</button>
         ${allChars.map(h => {
           const c = CHARACTERS[h] || {};
-          return `<button class="btn ${contentFilter===h?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${h}')">${esc(c.name || h)}</button>`;
+          const cnt = (grouped[h] || []).length;
+          return `<button class="btn ${contentFilter===h?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${h}')">${esc(c.name || h)} (${cnt})</button>`;
         }).join('')}
       </div>
     </div>
     <div id="content-list">
-      ${renderMainPostsList(grouped)}
+      ${renderMainPostsList(grouped, allChars)}
     </div>
   `;
 }
@@ -744,14 +766,13 @@ function filterContent(handle) {
   renderContent();
 }
 
-function renderMainPostsList(grouped) {
-  const keys = contentFilter ? [contentFilter] : Object.keys(grouped);
-  if (!keys.length) return '<div class="card"><div class="empty">还没有帖子</div></div>';
+function renderMainPostsList(grouped, allChars) {
+  const keys = contentFilter ? [contentFilter] : allChars;
+  if (!keys.length) return '<div class="card"><div class="empty">还没有角色</div></div>';
 
   return keys.map(handle => {
     const c = CHARACTERS[handle] || { name: handle };
     const list = grouped[handle] || [];
-    if (!list.length) return '';
     return `
       <div class="card" style="padding:12px 16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -760,12 +781,14 @@ function renderMainPostsList(grouped) {
           </div>
           <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="openPostEditor('', '${handle}', 'main')">+ 新建</button>
         </div>
-        ${list.map(p => `
-          <div style="padding:10px;border-radius:8px;background:var(--bg);margin-bottom:6px;cursor:pointer;" onclick="openPostEditor('${p.id}', '', 'main')">
-            <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">${esc(p.date || '')}</div>
-            <div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(p.content.slice(0, 100))}</div>
-          </div>
-        `).join('')}
+        ${list.length === 0
+          ? '<div style="font-size:13px;color:var(--muted);padding:8px 0;">还没有帖子</div>'
+          : list.map(p => `
+            <div style="padding:10px;border-radius:8px;background:var(--bg);margin-bottom:6px;cursor:pointer;" onclick="openPostEditor('${p.id}', '', 'main')">
+              <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">${esc(p.date || '')}</div>
+              <div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(p.content.slice(0, 100))}</div>
+            </div>
+          `).join('')}
       </div>
     `;
   }).join('');
