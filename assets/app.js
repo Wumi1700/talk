@@ -780,7 +780,7 @@ async function loadData() {
 
   const [cRes, pRes] = await Promise.all([
     db.from('characters').select('*'),
-    db.from('posts').select('*').eq('post_type', 'main').order('date', { ascending: false })
+    db.from('posts').select('*').eq('post_type', 'main').eq('archived', false).order('date', { ascending: false })
   ]);
 
   const charObj = {};
@@ -1696,11 +1696,16 @@ async function initCharacter() {
         <span><b>${char.following || 0}</b> 关注</span>
       </div>
     </div>
-    <div class="profile-tabs" id="profile-tabs">
-      <button class="active" data-tab="posts">动态</button>
-      ${(char.privacy || {}).follows !== false ? '<button data-tab="follows">关注</button>' : ''}
-      ${(char.privacy || {}).likes !== false ? '<button data-tab="likes">点赞</button>' : ''}
-      ${(char.privacy || {}).bookmarks !== false ? '<button data-tab="bookmarks">收藏</button>' : ''}
+    <div class="profile-tabs" id="profile-tabs" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;">
+        <button class="active" data-tab="posts">动态</button>
+        ${(char.privacy || {}).follows !== false ? '<button data-tab="follows">关注</button>' : ''}
+        ${(char.privacy || {}).likes !== false ? '<button data-tab="likes">点赞</button>' : ''}
+        ${(char.privacy || {}).bookmarks !== false ? '<button data-tab="bookmarks">收藏</button>' : ''}
+      </div>
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;margin-right:10px;">
+        <input type="checkbox" id="show-archived-chk" onchange="toggleArchivedPosts('${handle}')"> 查看全部（含旧帖）
+      </label>
     </div>
     <div id="tab-content"></div>
   `;
@@ -1714,6 +1719,32 @@ async function initCharacter() {
       await renderCharacterTab(b.dataset.tab, char, posts);
     });
   });
+}
+
+async function toggleArchivedPosts(handle) {
+  const chk = document.getElementById('show-archived-chk');
+  const showAll = chk.checked;
+  const tabContent = $('#tab-content');
+  tabContent.innerHTML = '<div class="empty">加载中...</div>';
+
+  const { data } = await db.from('posts')
+    .select('*')
+    .eq('character', handle)
+    .eq('post_type', 'main')
+    .order('date', { ascending: false });
+    
+  // 如果没勾选，过滤掉已归档的
+  let posts = (data || []).map(normalizePost);
+  if (!showAll) {
+    posts = posts.filter(p => !p.archived);
+  }
+
+  if (!posts.length) {
+    tabContent.innerHTML = '<div class="empty">还没有动态</div>';
+    return;
+  }
+  
+  tabContent.innerHTML = posts.map(p => renderPostCard(p)).join('');
 }
 
 async function initPost() {
@@ -2451,7 +2482,8 @@ async function loadForumData() {
     await loadEvents();
     const { data, error } = await db.from('posts')
       .select('*')
-      .eq('post_type', 'forum');
+      .eq('post_type', 'forum')
+      .eq('archived', false);
     if (error) throw error;
 
     const allPosts = (data || []).map(normalizePost);
