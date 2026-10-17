@@ -2,6 +2,7 @@
 const SUPABASE_URL = 'https://nsoyywbuqpfhhrezdcly.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zb3l5d2J1cXBmaGhyZXpkY2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MzMyODIsImV4cCI6MjEwNjQwOTI4Mn0.L17d0locmWHjQFykzv9bTjTyLZAk8LDyfSmpxbEnTgg';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let _unreadCache = { count: 0, t: 0 };
 
 const ADMIN_EMAILS = ['wuumii@outlook.com'];
 // ===== 从 app.js 复制的工具函数 =====
@@ -1113,8 +1114,10 @@ async function adminSubmitReply(postId, parentId) {
   if (parentComment && parentComment.user_id) {
     await db.from('notifications').insert({
       user_id: parentComment.user_id,
+      sender_id: currentUser.id,
       type: 'reply_comment',
       target_id: newComment.id,
+      extra_text: content.slice(0, 30),
       is_read: false
     });
   }
@@ -1158,6 +1161,140 @@ async function adminDeleteComment(commentId) {
   await db.from('comments').delete().eq('id', commentId);
   showToast('已删除');
   if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
+}
+
+//===== 评论点赞 ========
+async function toggleCommentLike(commentId, btn) {
+  if (!currentUser) return showToast('请先登录');
+  if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
+  
+  const countSpan = btn.querySelector('.like-count');
+  const heartSpan = btn.querySelector('.heart-icon');
+  const isLiked = btn.dataset.liked === 'true';
+
+  if (isLiked) {
+    await db.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id);
+    btn.dataset.liked = 'false';
+    btn.style.color = 'var(--muted)';
+    countSpan.textContent = Math.max(0, parseInt(countSpan.textContent) - 1);
+    if (heartSpan) heartSpan.textContent = '♡';
+  } else {
+    await db.from('comment_likes').insert({ comment_id: commentId, user_id: currentUser.id });
+    btn.dataset.liked = 'true';
+    btn.style.color = '#E76F51';
+    
+    // 动画效果
+    btn.classList.remove('pop');
+    void btn.offsetWidth;
+    btn.classList.add('pop');
+    countSpan.textContent = parseInt(countSpan.textContent) + 1;
+    if (heartSpan) heartSpan.textContent = '♥';
+
+    // 发送点赞通知
+    const { data: parentComment } = await db.from('comments').select('user_id').eq('id', commentId).single();
+    if (parentComment && parentComment.user_id && parentComment.user_id !== currentUser.id) {
+      await db.from('notifications').insert({
+        user_id: parentComment.user_id,
+        sender_id: currentUser.id,
+        type: 'like_comment',
+        target_id: commentId,
+        is_read: false
+      });
+    }
+  }
+}
+
+// =====通知中心=======
+async function initNotifications() {
+  await checkUser();
+  if (currentProfile && currentProfile.is_banned) return;
+  await loadData();
+  const root = $('#notifications-app');
+  if (!currentUser) {
+    root.innerHTML = '<div class="empty">请先登录后再查看通知</div>';
+    return;
+  }
+
+  const { data: list, error } = await db.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(50);
+
+  if (error) { root.innerHTML = '<div class="empty">加载失败：' + error.message + '</div>'; return; }
+
+  if (!list || !list.length) {
+    root.innerHTML = `
+      <div class="card">
+        <h3>通知</h3>
+        <div class="empty">还没有任何通知</div>
+      </div>
+    `;
+    return;
+  }
+
+  // 批量查发送者的头像和名字
+  const senderIds = [...new Set(list.filter(n => n.sender_id).map(n => n.sender_id))];
+  const senderMap = {};
+  if (senderIds.length) {
+    const { data: profs } = await db.from('profiles').select('id, username, avatar_url').in('id', senderIds);
+    (profs || []).forEach(p => { senderMap[p.id] = p; });
+  }
+
+  // 批量查评论对应的帖子ID，用于点击跳转
+  const commentIds = list.filter(n => n.type === 'reply_comment' || n.type === 'like_comment').map(n => n.target_id);
+  const commentPostMap = {};
+  if (commentIds.length) {
+    const { data: cms } = await db.from('comments').select('id, post_id').in('id', commentIds);
+    (cms || []).forEach(c => { commentPostMap[c.id] = c.post_id; });
+  }
+
+  root.innerHTML = `
+    <div class="card"><h3>通知</h3></div>
+    ${list.map(n => {
+      const sender = senderMap[n.sender_id] || {};
+      const senderName = sender.username || '某人';
+      const senderAvatar = userAvatarHTML(sender, 32);
+      
+      let textHTML = '';
+      let link = '#';
+
+      if (n.type === 'reply_comment') {
+        textHTML = `<b>${senderName}</b> 回复了你的评论：<span style="color:var(--muted);">"${n.extra_text || ''}..."</span>`;
+        if (commentPostMap[n.target_id]) link = `post.html?id=${commentPostMap[n.target_id]}`;
+      } else if (n.type === 'like_comment') {
+        textHTML = `<b>${senderName}</b> 点赞了你的评论`;
+        if (commentPostMap[n.target_id]) link = `post.html?id=${commentPostMap[n.target_id]}`;
+      } else if (n.type === 'message') {
+        textHTML = `<b>角色</b> 给你发了一条私信：<span style="color:var(--muted);">${n.extra_text || n.target_id}</span>`;
+        link = 'message.html';
+      } else {
+        textHTML = `系统通知：${n.target_id}`;
+      }
+
+      const time = new Date(n.created_at).toLocaleString('zh-CN');
+      const unread = !n.is_read;
+
+      return `
+        <a href="${link}" style="display:block; text-decoration:none; color:inherit;">
+          <div class="card" style="background:${unread ? 'var(--primary-light)' : 'var(--card)'};border-color:${unread ? 'var(--primary)' : 'var(--border)'}; margin-bottom:8px;">
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              ${senderAvatar}
+              <div style="flex:1;">
+                <div style="font-size:14px; line-height:1.5; color:var(--text);">${textHTML}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:6px;">${time}</div>
+              </div>
+              ${unread ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--primary);flex-shrink:0;margin-top:6px;"></span>' : ''}
+            </div>
+          </div>
+        </a>
+      `;
+    }).join('')}
+  `;
+
+  // 顺便把未读标记为已读
+  const unreadIds = list.filter(n => !n.is_read).map(n => n.id);
+  if (unreadIds.length) {
+    await db.from('notifications').update({ is_read: true }).in('id', unreadIds);
+    _unreadCache.t = 0;
+    updateUnreadBadge();
+  }
 }
 
 // ===== 图片上传到 Supabase Storage =====
