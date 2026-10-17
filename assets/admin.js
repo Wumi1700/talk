@@ -1098,29 +1098,31 @@ async function adminSubmitReply(postId, parentId) {
   const content = document.querySelector(`#reply-content-${parentId}`).value.trim();
   if (!content) return showToast('请输入回复内容');
 
+  // 1. 插入角色评论
   const { data: newComment, error } = await db.from('comments').insert({
     post_id: postId,
-    user_id: null,
+    user_id: null,            // 角色没有真实 user_id
     content: content,
-    as_character: handle,
-    parent_id: parentId,
+    as_character: handle,     // 标记角色 handle
+    parent_id: parentId,      // 挂在父评论下
     status: 'visible'
   }).select('id').single();
 
   if (error) return showToast('回复失败：' + error.message);
 
-  // 通知被回复的用户
+  // 2. 给被回复的用户发通知
   const { data: parentComment } = await db.from('comments').select('user_id').eq('id', parentId).single();
   if (parentComment && parentComment.user_id) {
     await db.from('notifications').insert({
       user_id: parentComment.user_id,
-      sender_id: currentUser.id,
+      sender_id: currentUser.id,     // 这里的 sender_id 填管理员的账号，用于记录
       type: 'reply_comment',
       target_id: newComment.id,
       extra_text: content.slice(0, 30),
       is_read: false
     });
   }
+  
   showToast('已回复');
   if (window._cancelReply) window._cancelReply();
 }
@@ -1130,6 +1132,7 @@ async function adminPostAsCharacter(postId) {
   const content = document.querySelector('#cm-char-content').value.trim();
   if (!content) return showToast('请输入内容');
 
+  // 顶层评论，不需要 parent_id，也不需要发通知（因为不是回复某人）
   const { error } = await db.from('comments').insert({
     post_id: postId,
     user_id: null,
