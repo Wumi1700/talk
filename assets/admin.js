@@ -945,14 +945,24 @@ async function openCommentsPanel(postId) {
     const allVisible = (comments || []).filter(c => c.status !== 'hidden');
     const hiddenCount = (comments || []).length - allVisible.length;
 
-    // 构建树并修复孤儿节点
-    const validIds = new Set(visible.map(c => c.id));
-    const roots = visible.filter(c => !c.parent_id || !validIds.has(c.parent_id));
-    const repliesMap = {};
-    visible.filter(c => c.parent_id && validIds.has(c.parent_id)).forEach(c => {
-      if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
-      repliesMap[c.parent_id].push(c);
+    // 平铺构建
+    const childrenMap = {};
+    visible.forEach(c => {
+      if (c.parent_id) {
+        if (!childrenMap[c.parent_id]) childrenMap[c.parent_id] = [];
+        childrenMap[c.parent_id].push(c);
+      }
     });
+
+    function collectDescendants(commentId, result = []) {
+      if (childrenMap[commentId]) {
+        childrenMap[commentId].forEach(child => {
+          result.push(child);
+          collectDescendants(child.id, result);
+        });
+      }
+      return result;
+    }
 
     function renderOne(c, isReply) {
       let name, avatar, isRole = !!c.as_character;
@@ -1000,10 +1010,13 @@ async function openCommentsPanel(postId) {
     }
 
     let listHTML = '';
-    roots.forEach(c => {
-      listHTML += renderOne(c, false);
-      (repliesMap[c.id] || []).forEach(r => {
-        listHTML += renderOne(r, true);
+    const roots = visible.filter(c => !c.parent_id);
+    roots.forEach(root => {
+      listHTML += renderOne(root, false);
+      const descendants = collectDescendants(root.id);
+      descendants.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      descendants.forEach(desc => {
+        listHTML += renderOne(desc, true);
       });
     });
 
