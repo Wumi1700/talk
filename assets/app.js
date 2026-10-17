@@ -936,8 +936,11 @@ async function loadComments(postId) {
   if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
 
-  // 查询点赞
+  // 1. 建立索引和点赞查询
   const commentIds = data.map(c => c.id);
+  const commentMap = {};
+  data.forEach(c => { commentMap[c.id] = c; });
+
   const likeCounts = {};
   const likedByMe = {};
   if (commentIds.length) {
@@ -948,7 +951,7 @@ async function loadComments(postId) {
     });
   }
 
-  // 批量查所有评论者的昵称和头像（只查普通用户，角色不查）
+  // 2. 批量查所有普通用户的信息
   const userIds = [...new Set(data.filter(c => !c.as_character && c.user_id).map(c => c.user_id))];
   const profileMap = {};
   if (userIds.length) {
@@ -956,19 +959,29 @@ async function loadComments(postId) {
     (profiles || []).forEach(p => { profileMap[p.id] = p; });
   }
 
-  // 渲染单条评论
+  // 3. 获取评论人名字的辅助函数
+  function getCommenterName(c) {
+    if (!c) return '未知';
+    if (c.as_character) {
+      const ch = CHARACTERS[c.as_character] || { name: c.as_character };
+      return ch.name;
+    } else {
+      const p = profileMap[c.user_id] || {};
+      return p.username || '匿名旅者';
+    }
+  }
+
+  // 4. 渲染单条评论
   const renderOne = (c, isReply) => {
     let displayName, nameHTML, avatarHTMLSmall, factionIconHTML;
 
     if (c.as_character) {
-      // 角色身份评论
       const ch = CHARACTERS[c.as_character] || { name: c.as_character, handle: c.as_character };
       displayName = ch.name;
       nameHTML = `<a href="character.html?handle=${ch.handle}" style="color:var(--primary-dark);font-weight:600;">${displayName.replace(/</g,'&lt;')}</a>${ch.verified ? ` <span class="verified">✓ ${ch.verified}</span>` : ''}`;
       avatarHTMLSmall = avatarHTML(ch);
       factionIconHTML = ch.faction ? factionIcon(ch.faction) + ' ' : '';
     } else {
-      // 普通用户评论
       const p = profileMap[c.user_id] || {};
       const isMe = currentUser && c.user_id === currentUser.id;
       displayName = p.username || '匿名旅者';
@@ -979,17 +992,26 @@ async function loadComments(postId) {
       factionIconHTML = p.faction ? factionIcon(p.faction) + ' ' : '';
     }
 
+    // 处理 @某人
+    let replyPrefix = '';
+    if (c.parent_id && commentMap[c.parent_id]) {
+      const parentName = getCommenterName(commentMap[c.parent_id]);
+      replyPrefix = `<span style="color:var(--primary); font-size:12px; margin-right:4px;">回复 @${parentName.replace(/</g,'&lt;')}：</span>`;
+    }
+
     const count = likeCounts[c.id] || 0;
     const liked = !!likedByMe[c.id];
     const canDelete = !c.as_character && currentUser && c.user_id === currentUser.id;
 
     return `
-      <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
+      <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;' : ''}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           ${avatarHTMLSmall}
           <span>${factionIconHTML}${nameHTML}</span>
         </div>
-        <div style="word-break:break-word;line-height:1.6;">${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        <div style="word-break:break-word;line-height:1.6;">
+          ${replyPrefix}${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+        </div>
         <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
           <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
             <span class="heart-icon">${liked ? '♥' : '♡'}</span> <span class="like-count">${count}</span>
@@ -1000,7 +1022,7 @@ async function loadComments(postId) {
         </div>
         <div id="reply-box-${c.id}" style="display:none;margin-top:8px;">
           <div style="display:flex;gap:6px;">
-            <input id="reply-input-${c.id}" type="text" maxlength="500" placeholder="回复..." style="flex:1;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <input id="reply-input-${c.id}" type="text" maxlength="500" placeholder="回复 @${displayName}..." style="flex:1;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
             <button class="btn btn-primary" onclick="submitReply('${postId}', '${c.id}')" style="padding:6px 12px;font-size:13px;">发送</button>
           </div>
         </div>
@@ -1008,36 +1030,41 @@ async function loadComments(postId) {
     `;
   };
 
-  // 构建树结构，并修复孤儿节点（父评论被隐藏或删除时，子评论依然显示）
-  const validIds = new Set(data.map(c => c.id));
-  const roots = data.filter(c => !c.parent_id || !validIds.has(c.parent_id));
-  const repliesMap = {};
-  data.filter(c => c.parent_id && validIds.has(c.parent_id)).forEach(c => {
-    if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
-    repliesMap[c.parent_id].push(c);
+  // 5. 构建树，平铺所有子孙评论
+  const childrenMap = {};
+  data.forEach(c => {
+    if (c.parent_id) {
+      if (!childrenMap[c.parent_id]) childrenMap[c.parent_id] = [];
+      childrenMap[c.parent_id].push(c);
+    }
   });
 
+  // 递归收集所有后代（不管层级多深）
+  function collectDescendants(commentId, result = []) {
+    if (childrenMap[commentId]) {
+      childrenMap[commentId].forEach(child => {
+        result.push(child);
+        collectDescendants(child.id, result);
+      });
+    }
+    return result;
+  }
+
   let html = '';
-  roots.forEach(c => {
-    html += renderOne(c, false);
-    (repliesMap[c.id] || []).forEach(r => {
-      html += renderOne(r, true);
+  const roots = data.filter(c => !c.parent_id); // 只取顶级评论
+  
+  roots.forEach(root => {
+    // 渲染顶级
+    html += renderOne(root, false);
+    // 获取该顶级下的所有子孙，按时间平铺
+    const descendants = collectDescendants(root.id);
+    descendants.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    descendants.forEach(desc => {
+      html += renderOne(desc, true); // true 表示是回复（左侧有缩进）
     });
   });
   
   list.innerHTML = html;
-}
-
-function showReplyBox(commentId) {
-  const box = document.getElementById(`reply-box-${commentId}`);
-  if (!box) return;
-  if (box.style.display === 'none' || !box.style.display) {
-    box.style.display = 'block';
-    const input = document.getElementById(`reply-input-${commentId}`);
-    if (input) input.focus();
-  } else {
-    box.style.display = 'none';
-  }
 }
 
 async function submitReply(postId, parentId) {
