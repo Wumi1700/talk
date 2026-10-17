@@ -1111,11 +1111,15 @@ async function adminSubmitReply(postId, parentId) {
   if (error) return showToast('回复失败：' + error.message);
 
   // 2. 给被回复的用户发通知
+  // 给被回复的用户发通知
   const { data: parentComment } = await db.from('comments').select('user_id').eq('id', parentId).single();
   if (parentComment && parentComment.user_id) {
+    const charInfo = CHARACTERS[handle] || {}; // 获取当前回复的角色信息
     await db.from('notifications').insert({
       user_id: parentComment.user_id,
-      sender_id: currentUser.id,     // 这里的 sender_id 填管理员的账号，用于记录
+      sender_id: null, // 角色没有真实账号 ID
+      sender_name: charInfo.name || handle, // 存角色的名字，比如"布兰森·丹尼尔"
+      sender_avatar: charInfo.avatar || '', // 存角色的头像
       type: 'reply_comment',
       target_id: newComment.id,
       extra_text: content.slice(0, 30),
