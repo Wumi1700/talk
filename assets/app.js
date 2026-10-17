@@ -952,15 +952,20 @@ async function loadComments(postId) {
     (profiles || []).forEach(p => { profileMap[p.id] = p; });
   }
 
-  const roots = data.filter(c => !c.parent_id);
-    // 区分：角色评论 vs 用户评论
-  const charComments = data.filter(c => c.as_character);
-  const charHandles = [...new Set(charComments.map(c => c.as_character))];
-  // CHARACTERS 已经在全局加载了，直接用
+  const validIds = new Set(data.map(c => c.id));
+  const roots = data.filter(c => !c.parent_id || !validIds.has(c.parent_id));
   const repliesMap = {};
-  data.filter(c => c.parent_id).forEach(c => {
+  data.filter(c => c.parent_id && validIds.has(c.parent_id)).forEach(c => {
     if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
     repliesMap[c.parent_id].push(c);
+  });
+
+  let html = '';
+  roots.forEach(c => {
+    html += renderOne(c, false);
+    (repliesMap[c.id] || []).forEach(r => {
+      html += renderOne(r, true);
+    });
   });
 
   const renderOne = (c, isReply) => {
