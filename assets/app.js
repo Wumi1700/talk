@@ -1502,7 +1502,7 @@ async function initProfile() {
       </div>
     </div>
 
-    ${renderAchievements({ follow: followCount, like: likeCount, bookmark: bookmarkCount, comment: commentCount, message: 0, replied: repliedCount, joinedDays })}
+${renderAchievements({ follow: followCount, like: likeCount, bookmark: bookmarkCount, comment: commentCount, message: 0, replied: repliedCount, joinedDays, cannot_leave: !!currentProfile.cannot_leave })}
     <div class="profile-tabs" id="profile-tabs">
       <button class="active" data-tab="follows">我的关注</button>
       <button data-tab="likes">我的点赞</button>
