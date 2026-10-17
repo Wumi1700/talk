@@ -2206,7 +2206,6 @@ async function getUnreadCount() {
 async function initNotifications() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
-  await loadData();
   const root = $('#notifications-app');
   if (!currentUser) {
     root.innerHTML = '<div class="empty">请先登录后再查看通知</div>';
@@ -2227,14 +2226,6 @@ async function initNotifications() {
     return;
   }
 
-  // 查发送者
-  const senderIds = [...new Set(list.filter(n => n.sender_id).map(n => n.sender_id))];
-  const senderMap = {};
-  if (senderIds.length) {
-    const { data: profs } = await db.from('profiles').select('id, username, avatar_url').in('id', senderIds);
-    (profs || []).forEach(p => { senderMap[p.id] = p; });
-  }
-
   // 查帖子ID，用于点击跳转
   const commentIds = list.filter(n => n.type === 'reply_comment' || n.type === 'like_comment').map(n => n.target_id);
   const commentPostMap = {};
@@ -2246,9 +2237,14 @@ async function initNotifications() {
   root.innerHTML = `
     <div class="card"><h3>通知</h3></div>
     ${list.map(n => {
-      const sender = senderMap[n.sender_id] || {};
-      const senderName = sender.username || '某人';
-      const senderAvatar = userAvatarHTML(sender, 32);
+      // 直接用刚才存进表里的名字和头像！
+      const senderName = n.sender_name || '某人';
+      const senderAvatarUrl = n.sender_avatar;
+      
+      // 拼接头像 HTML（支持有图和无图）
+      const avatarHTML = senderAvatarUrl 
+        ? `<img src="${senderAvatarUrl}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`
+        : `<div style="width:32px;height:32px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">${senderName.charAt(0)}</div>`;
       
       let textHTML = '';
       let link = '#';
@@ -2273,7 +2269,7 @@ async function initNotifications() {
         <a href="${link}" style="display:block; text-decoration:none; color:inherit;">
           <div class="card" style="background:${unread ? 'var(--primary-light)' : 'var(--card)'};border-color:${unread ? 'var(--primary)' : 'var(--border)'}; margin-bottom:8px;">
             <div style="display:flex;align-items:flex-start;gap:12px;">
-              ${senderAvatar}
+              ${avatarHTML}
               <div style="flex:1;">
                 <div style="font-size:14px; line-height:1.5; color:var(--text);">${textHTML}</div>
                 <div style="font-size:11px;color:var(--muted);margin-top:6px;">${time}</div>
@@ -2290,7 +2286,7 @@ async function initNotifications() {
   const unreadIds = list.filter(n => !n.is_read).map(n => n.id);
   if (unreadIds.length) {
     await db.from('notifications').update({ is_read: true }).in('id', unreadIds);
-    _unreadCache.t = 0;
+    if (typeof _unreadCache !== 'undefined') _unreadCache.t = 0;
     updateUnreadBadge();
   }
 }
