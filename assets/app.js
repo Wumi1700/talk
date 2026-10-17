@@ -1084,7 +1084,19 @@ async function submitReply(postId, parentId) {
   const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
   if (dayCount >= 10) return showToast('每天最多评论10条（含回复）');
 
-  const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content, parent_id: parentId });
+  const { data: newComment, error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content, parent_id: parentId }).select('id').single();
+  if (error) return showToast('回复失败：' + error.message);
+  
+  // 发送回复通知
+  const { data: parentComment } = await db.from('comments').select('user_id, as_character').eq('id', parentId).single();
+  if (parentComment && parentComment.user_id && parentComment.user_id !== currentUser.id) {
+    await db.from('notifications').insert({
+      user_id: parentComment.user_id,
+      type: 'reply_comment',
+      target_id: newComment.id,
+      is_read: false
+    });
+  }
   if (error) return showToast('回复失败：' + error.message);
   showToast('回复成功');
   input.value = '';
@@ -1107,6 +1119,16 @@ async function toggleCommentLike(commentId, btn) {
     if (heartSpan) heartSpan.textContent = '♡';
   } else {
     await db.from('comment_likes').insert({ comment_id: commentId, user_id: currentUser.id });
+    // 发送点赞通知
+    const { data: parentComment } = await db.from('comments').select('user_id').eq('id', commentId).single();
+    if (parentComment && parentComment.user_id && parentComment.user_id !== currentUser.id) {
+      await db.from('notifications').insert({
+        user_id: parentComment.user_id,
+        type: 'like_comment',
+        target_id: commentId,
+        is_read: false
+      });
+    }
     btn.dataset.liked = 'true';
     btn.style.color = '#E76F51';
     btn.classList.remove('pop');
@@ -2123,9 +2145,11 @@ async function checkNewReplies() {
 // ===== 14. 通知中心 =====
 function notifyText(type) {
   switch (type) {
-    case 'like': return '有人点赞了你的评论';
-    case 'comment': return '有人回复了你';
-    case 'message': return '角色给你发了一条私信';
+    case 'like': return '有人赞同了你';
+    case 'like_comment': return '有人赞同了你';
+    case 'comment': return '有人和你说话了';
+    case 'reply_comment': return '有人和你说话了';
+    case 'message': return '角色给你写了封信';
     case 'follow': return '有人关注了你';
     case 'system': return '系统通知';
     default: return '新通知';
