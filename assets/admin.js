@@ -909,10 +909,9 @@ async function saveHotsearch(faction) {
   showToast(faction + ' 热搜已保存');
 }
 
-// ===== 评论管理面板 =====
 async function openCommentsPanel(postId) {
-  let replyToId = null; // 当前正在回复的评论 id
-  let filterMode = 'all'; // all | role | user
+  let replyToId = null;
+  let filterMode = 'all';
 
   const modal = document.createElement('div');
   modal.id = 'comments-panel-modal';
@@ -939,7 +938,6 @@ async function openCommentsPanel(postId) {
       (profs || []).forEach(p => { profileMap[p.id] = p; });
     }
 
-    // 筛选
     let visible = (comments || []).filter(c => c.status !== 'hidden');
     if (filterMode === 'role') visible = visible.filter(c => c.as_character);
     if (filterMode === 'user') visible = visible.filter(c => !c.as_character);
@@ -947,7 +945,7 @@ async function openCommentsPanel(postId) {
     const allVisible = (comments || []).filter(c => c.status !== 'hidden');
     const hiddenCount = (comments || []).length - allVisible.length;
 
-    // 构建树（修复孤儿节点）
+    // 构建树并修复孤儿节点
     const validIds = new Set(visible.map(c => c.id));
     const roots = visible.filter(c => !c.parent_id || !validIds.has(c.parent_id));
     const repliesMap = {};
