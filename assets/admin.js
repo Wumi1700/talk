@@ -947,10 +947,11 @@ async function openCommentsPanel(postId) {
     const allVisible = (comments || []).filter(c => c.status !== 'hidden');
     const hiddenCount = (comments || []).length - allVisible.length;
 
-    // 构建树
-    const roots = visible.filter(c => !c.parent_id);
+    // 构建树（修复孤儿节点）
+    const validIds = new Set(visible.map(c => c.id));
+    const roots = visible.filter(c => !c.parent_id || !validIds.has(c.parent_id));
     const repliesMap = {};
-    visible.filter(c => c.parent_id).forEach(c => {
+    visible.filter(c => c.parent_id && validIds.has(c.parent_id)).forEach(c => {
       if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
       repliesMap[c.parent_id].push(c);
     });
