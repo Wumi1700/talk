@@ -164,9 +164,9 @@ async function renderTodo() {
   const cards = [
     { icon: '✉️', label: '今日新私信', num: inbox.count || 0, href: '#inbox' },
     { icon: '🚨', label: '待处理举报', num: reports.count || 0, href: '#reports' },
-    { icon: '💬', label: '今日新评论', num: comments.count || 0, href: null },
-    { icon: '👥', label: '今日新用户', num: users.count || 0, href: null },
-    { icon: '🎭', label: '待看：回复角色', num: userReplyRoleCount, href: '#content' } // 加了这个卡片
+    { icon: '💬', label: '今日新评论', num: comments.count || 0, href: '#content' }, // 跳转到内容管理
+    { icon: '👥', label: '今日新用户', num: users.count || 0, href: '#users' },     // 跳转到用户管理
+    { icon: '🎭', label: '待看：回复角色', num: userReplyRoleCount, href: '#content' }
   ];
 
   root.innerHTML = `
