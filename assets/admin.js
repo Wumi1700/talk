@@ -1098,28 +1098,29 @@ async function adminSubmitReply(postId, parentId) {
   const content = document.querySelector(`#reply-content-${parentId}`).value.trim();
   if (!content) return showToast('请输入回复内容');
 
-  // 1. 插入角色评论
+  // 1. 获取角色信息（为了拿到角色的名字和头像）
+  const charInfo = CHARACTERS[handle] || {};
+
+  // 2. 插入角色评论
   const { data: newComment, error } = await db.from('comments').insert({
     post_id: postId,
-    user_id: null,            // 角色没有真实 user_id
+    user_id: null,
     content: content,
-    as_character: handle,     // 标记角色 handle
-    parent_id: parentId,      // 挂在父评论下
+    as_character: handle,
+    parent_id: parentId,
     status: 'visible'
   }).select('id').single();
 
   if (error) return showToast('回复失败：' + error.message);
 
-  // 2. 给被回复的用户发通知
-  // 给被回复的用户发通知
+  // 3. 给被回复的用户发通知（核心：存下角色的名字和头像）
   const { data: parentComment } = await db.from('comments').select('user_id').eq('id', parentId).single();
   if (parentComment && parentComment.user_id) {
-    const charInfo = CHARACTERS[handle] || {}; // 获取当前回复的角色信息
     await db.from('notifications').insert({
       user_id: parentComment.user_id,
-      sender_id: null, // 角色没有真实账号 ID
-      sender_name: charInfo.name || handle, // 存角色的名字，比如"布兰森·丹尼尔"
-      sender_avatar: charInfo.avatar || '', // 存角色的头像
+      sender_id: null, // 角色不需要 uuid
+      sender_name: charInfo.name || handle, // 👈 这里存角色的名字（如：布兰森）
+      sender_avatar: charInfo.avatar || '', // 👈 这里存角色的头像
       type: 'reply_comment',
       target_id: newComment.id,
       extra_text: content.slice(0, 30),
