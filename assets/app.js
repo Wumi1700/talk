@@ -1067,6 +1067,18 @@ async function loadComments(postId) {
   list.innerHTML = html;
 }
 
+function showReplyBox(commentId) {
+  const box = document.getElementById(`reply-box-${commentId}`);
+  if (!box) return;
+  if (box.style.display === 'none' || !box.style.display) {
+    box.style.display = 'block';
+    const input = document.getElementById(`reply-input-${commentId}`);
+    if (input) input.focus();
+  } else {
+    box.style.display = 'none';
+  }
+}
+
 async function submitReply(postId, parentId) {
   if (!currentUser) return showToast('请先登录');
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
@@ -1404,7 +1416,7 @@ function renderAchievements(s) {
     { icon: '📅', name: '旅者', desc: '加入满 7 天', unlocked: s.joinedDays >= 7 },
     { icon: '🌟', name: '老旅者', desc: '加入满 30 天', unlocked: s.joinedDays >= 30 },
     { icon: '🏆', name: '资深旅者', desc: '加入满 100 天', unlocked: s.joinedDays >= 100 },
-    { icon: '🔒', name: '无法注销', desc: '尝试逃离 TALK，但被系统无情驳回。', unlocked: !!currentProfile.cannot_leave },
+    { icon: '🔒', name: '无法注销', desc: '尝试逃离 TALK，但被系统无情驳回。', unlocked: !!s.cannot_leave },
   ];
   const unlockedCount = list.filter(a => a.unlocked).length;
   return `
