@@ -1105,6 +1105,8 @@ async function submitReply(postId, parentId) {
     await db.from('notifications').insert({
       user_id: parentComment.user_id,
       sender_id: currentUser.id,
+      sender_name: currentProfile?.username || '匿名旅者', 
+      sender_avatar: currentProfile?.avatar_url || '',     
       type: 'reply_comment',
       target_id: newComment.id,
       extra_text: content.slice(0, 30),
@@ -1150,6 +1152,8 @@ async function toggleCommentLike(commentId, btn) {
       await db.from('notifications').insert({
         user_id: parentComment.user_id,
         sender_id: currentUser.id,
+        sender_name: currentProfile?.username || '匿名旅者', 
+        sender_avatar: currentProfile?.avatar_url || '',     
         type: 'like_comment',
         target_id: commentId,
         is_read: false
