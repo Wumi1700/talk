@@ -117,6 +117,7 @@ function renderNav() {
 async function router() {
   const cur = location.hash.slice(1) || 'todo';
   renderNav();
+  $('#admin-app').innerHTML = '<div class="empty" style="padding:40px;text-align:center;color:var(--muted);">⏳ 正在加载数据…</div>';
   if (cur === 'todo') return renderTodo();
   if (cur === 'inbox') return renderInbox();
   if (cur === 'content') return renderContent();
@@ -135,18 +136,37 @@ async function renderTodo() {
   const today = new Date(); today.setHours(0,0,0,0);
   const todayISO = today.toISOString();
 
-  const [inbox, reports, comments, users] = await Promise.all([
+  const [inbox, reports, comments, users, roleReplies] = await Promise.all([
     db.from('messages').select('*', { count: 'exact', head: true }).eq('is_from_character', false).gte('created_at', todayISO),
     db.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     db.from('comments').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
     db.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+    // 查最近 50 条父评论是角色发的，且子评论是用户发的
+    db.from('comments').select('id, content, parent_id, created_at')
+      .not('parent_id', 'is', null)
+      .eq('status', 'visible')
+      .order('created_at', { ascending: false })
+      .limit(50)
   ]);
+
+  // 过滤出用户回复角色的评论（父评论的 as_character 不为空）
+  let userReplyRoleCount = 0;
+  if (roleReplies.data && roleReplies.data.length) {
+    const parentIds = [...new Set(roleReplies.data.map(c => c.parent_id))];
+    const { data: parents } = await db.from('comments').select('id, as_character').in('id', parentIds);
+    const parentMap = {};
+    (parents || []).forEach(p => { parentMap[p.id] = p; });
+    
+    // 统计有多少是用户回复了角色
+    userReplyRoleCount = roleReplies.data.filter(c => parentMap[c.parent_id] && parentMap[c.parent_id].as_character).length;
+  }
 
   const cards = [
     { icon: '✉️', label: '今日新私信', num: inbox.count || 0, href: '#inbox' },
     { icon: '🚨', label: '待处理举报', num: reports.count || 0, href: '#reports' },
     { icon: '💬', label: '今日新评论', num: comments.count || 0, href: null },
     { icon: '👥', label: '今日新用户', num: users.count || 0, href: null },
+    { icon: '🎭', label: '待看：回复角色', num: userReplyRoleCount, href: '#content' } // 加了这个卡片
   ];
 
   root.innerHTML = `
@@ -171,7 +191,7 @@ async function renderInbox() {
   const { data: msgs, error } = await db.from('messages')
     .select('id, user_id, character_id, content, created_at, is_from_character')
     .order('created_at', { ascending: false })
-    .limit(500);
+    .limit(100);
 
   if (error) { root.innerHTML = '<div class="empty">加载失败：' + esc(error.message) + '</div>'; return; }
 
@@ -1077,16 +1097,27 @@ async function adminSubmitReply(postId, parentId) {
   const content = document.querySelector(`#reply-content-${parentId}`).value.trim();
   if (!content) return showToast('请输入回复内容');
 
-  const { error } = await db.from('comments').insert({
+  const { data: newComment, error } = await db.from('comments').insert({
     post_id: postId,
     user_id: null,
     content: content,
     as_character: handle,
     parent_id: parentId,
     status: 'visible'
-  });
+  }).select('id').single();
 
   if (error) return showToast('回复失败：' + error.message);
+
+  // 通知被回复的用户
+  const { data: parentComment } = await db.from('comments').select('user_id').eq('id', parentId).single();
+  if (parentComment && parentComment.user_id) {
+    await db.from('notifications').insert({
+      user_id: parentComment.user_id,
+      type: 'reply_comment',
+      target_id: newComment.id,
+      is_read: false
+    });
+  }
   showToast('已回复');
   if (window._cancelReply) window._cancelReply();
 }
