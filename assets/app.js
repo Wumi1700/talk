@@ -1404,6 +1404,7 @@ function renderAchievements(s) {
     { icon: '📅', name: '旅者', desc: '加入满 7 天', unlocked: s.joinedDays >= 7 },
     { icon: '🌟', name: '老旅者', desc: '加入满 30 天', unlocked: s.joinedDays >= 30 },
     { icon: '🏆', name: '资深旅者', desc: '加入满 100 天', unlocked: s.joinedDays >= 100 },
+    { icon: '🔒', name: '无法注销', desc: '尝试逃离 TALK，但被系统无情驳回。', unlocked: !!currentProfile.cannot_leave },
   ];
   const unlockedCount = list.filter(a => a.unlocked).length;
   return `
@@ -2033,24 +2034,39 @@ async function updatePassword() {
 }
 
 async function deleteAccount() {
-  const ok = confirm('确定要删除账号吗？所有点赞、收藏、评论、关注、私信都会清空，且不可恢复。');
+  const ok = confirm('确定要注销账号吗？此操作不可恢复。');
   if (!ok) return;
-  const ok2 = confirm('再确认一次：真的要删除吗？');
+  const ok2 = confirm('真的要离开吗？再确认一次。');
   if (!ok2) return;
 
-  try {
-    await db.from('likes').delete().eq('user_id', currentUser.id);
-    await db.from('bookmarks').delete().eq('user_id', currentUser.id);
-    await db.from('comments').delete().eq('user_id', currentUser.id);
-    await db.from('follows').delete().eq('user_id', currentUser.id);
-    await db.from('messages').delete().eq('user_id', currentUser.id);
-    await db.from('profiles').delete().eq('id', currentUser.id);
-    await db.auth.signOut();
-    showToast('账号数据已清除');
-    setTimeout(() => { location.href = 'index.html'; }, 1500);
-  } catch (e) {
-    showToast('删除失败，请联系管理员');
-  }
+  const loading = document.createElement('div');
+  loading.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:15px;letter-spacing:1px;';
+  loading.innerHTML = `
+    <div style="width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
+    <div id="loading-text">正在验证身份...</div>
+  `;
+  const style = document.createElement('style');
+  style.textContent = `@keyframes spin { 100% { transform: rotate(360deg); } }`;
+  document.head.appendChild(style);
+  document.body.appendChild(loading);
+
+  setTimeout(() => { const t = document.getElementById('loading-text'); if(t) t.textContent = '正在清理互动数据...'; }, 1000);
+  setTimeout(() => { const t = document.getElementById('loading-text'); if(t) t.textContent = '正在断开与世界的连接...'; }, 2000);
+
+  setTimeout(async () => {
+    if (loading) loading.remove();
+
+    if (currentUser) {
+      await db.from('profiles').update({ cannot_leave: true }).eq('id', currentUser.id);
+      if (currentProfile) currentProfile.cannot_leave = true;
+    }
+
+    alert('【注销失败】\n\n无法删除账号：您的数据已深度绑定在当前航线。\n\n原因：该账号存在未结算的因果关系。\n\n（既然来了，就老老实实刷动态吧。）');
+    
+    showToast('🔒 解锁隐藏成就：无法注销');
+    
+    if (document.getElementById('user-profile')) initProfile();
+  }, 3500);
 }
 
 // ===== 13. 全站侧边栏 =====
