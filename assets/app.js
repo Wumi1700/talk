@@ -930,10 +930,13 @@ async function toggleBookmark(postId, btn) {
 async function loadComments(postId) {
   const list = document.getElementById(`comments-list-${postId}`);
   list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
+  
   const { data, error } = await db.from('comments').select('id, content, created_at, user_id, parent_id, as_character').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
+  
   if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
 
+  // 查询点赞
   const commentIds = data.map(c => c.id);
   const likeCounts = {};
   const likedByMe = {};
@@ -945,29 +948,15 @@ async function loadComments(postId) {
     });
   }
 
-  const userIds = [...new Set(data.map(c => c.user_id).filter(Boolean))];
+  // 批量查所有评论者的昵称和头像（只查普通用户，角色不查）
+  const userIds = [...new Set(data.filter(c => !c.as_character && c.user_id).map(c => c.user_id))];
   const profileMap = {};
   if (userIds.length) {
     const { data: profiles } = await db.from('profiles').select('id, username, avatar_url, faction').in('id', userIds);
     (profiles || []).forEach(p => { profileMap[p.id] = p; });
   }
 
-  const validIds = new Set(data.map(c => c.id));
-  const roots = data.filter(c => !c.parent_id || !validIds.has(c.parent_id));
-  const repliesMap = {};
-  data.filter(c => c.parent_id && validIds.has(c.parent_id)).forEach(c => {
-    if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
-    repliesMap[c.parent_id].push(c);
-  });
-
-  let html = '';
-  roots.forEach(c => {
-    html += renderOne(c, false);
-    (repliesMap[c.id] || []).forEach(r => {
-      html += renderOne(r, true);
-    });
-  });
-
+  // 渲染单条评论
   const renderOne = (c, isReply) => {
     let displayName, nameHTML, avatarHTMLSmall, factionIconHTML;
 
@@ -993,6 +982,7 @@ async function loadComments(postId) {
     const count = likeCounts[c.id] || 0;
     const liked = !!likedByMe[c.id];
     const canDelete = !c.as_character && currentUser && c.user_id === currentUser.id;
+
     return `
       <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
@@ -1017,7 +1007,16 @@ async function loadComments(postId) {
       </div>
     `;
   };
-  
+
+  // 构建树结构，并修复孤儿节点（父评论被隐藏或删除时，子评论依然显示）
+  const validIds = new Set(data.map(c => c.id));
+  const roots = data.filter(c => !c.parent_id || !validIds.has(c.parent_id));
+  const repliesMap = {};
+  data.filter(c => c.parent_id && validIds.has(c.parent_id)).forEach(c => {
+    if (!repliesMap[c.parent_id]) repliesMap[c.parent_id] = [];
+    repliesMap[c.parent_id].push(c);
+  });
+
   let html = '';
   roots.forEach(c => {
     html += renderOne(c, false);
@@ -1025,6 +1024,7 @@ async function loadComments(postId) {
       html += renderOne(r, true);
     });
   });
+  
   list.innerHTML = html;
 }
 
