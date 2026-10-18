@@ -9,6 +9,7 @@ let currentUser = null;
 let currentProfile = null;
 let POST_STATS = {};
 let _unreadCache = { count: 0, t: 0 };
+let currentHomeTab = 'recommend';
 
 // ===== 3. 工具函数 =====
 function $(sel, root = document) { return root.querySelector(sel); }
@@ -1690,31 +1691,51 @@ async function initHome() {
   await loadAds();
   await loadHotsearch();
 
-  let followedChars = [];
-  if (currentUser) {
-    const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
-    followedChars = (follows || []).map(f => f.character_id);
-  }
-
-  const sortedPosts = [...POSTS].sort((a, b) => {
-    const aF = followedChars.includes(a.character) ? 1 : 0;
-    const bF = followedChars.includes(b.character) ? 1 : 0;
-    if (aF !== bF) return bF - aF;
-    return (b.date || '').localeCompare(a.date || '');
-  });
-
   const feed = $('#feed');
-  
-  // 手机版热搜注入
   const isMobile = window.innerWidth <= 768;
   const mobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
 
-  if (!sortedPosts.length) {
+  let displayPosts = [...POSTS];
+
+  // 如果是关注流，执行过滤
+  if (currentHomeTab === 'following') {
+    if (!currentUser) {
+      feed.innerHTML = mobileHotsearchHTML + `<div class="empty" style="padding:40px 20px;">登录后查看你关注的动态<br><br><button class="btn btn-primary" onclick="openAuthModal()">去登录</button></div>`;
+      return;
+    }
+    // 查我关注了谁
+    const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
+    const followedChars = (follows || []).map(f => f.character_id);
+    
+    // 过滤帖子
+    displayPosts = POSTS.filter(p => followedChars.includes(p.character));
+    
+    if (!displayPosts.length) {
+      feed.innerHTML = mobileHotsearchHTML + '<div class="empty" style="padding:40px;">你关注的角色还没有发动态哦~</div>';
+      return;
+    }
+  } else {
+    // 推荐流：把关注的角色排在前面（我们之前的老逻辑）
+    let followedChars = [];
+    if (currentUser) {
+      const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
+      followedChars = (follows || []).map(f => f.character_id);
+    }
+    displayPosts.sort((a, b) => {
+      const aF = followedChars.includes(a.character) ? 1 : 0;
+      const bF = followedChars.includes(b.character) ? 1 : 0;
+      if (aF !== bF) return bF - aF;
+      return (b.date || '').localeCompare(a.date || '');
+    });
+  }
+
+  // 渲染列表
+  if (!displayPosts.length) {
     feed.innerHTML = mobileHotsearchHTML + '<div class="empty">还没有动态</div>';
   } else {
     const parts = [];
-    for (let i = 0; i < sortedPosts.length; i++) {
-      parts.push(renderPostCard(sortedPosts[i]));
+    for (let i = 0; i < displayPosts.length; i++) {
+      parts.push(renderPostCard(displayPosts[i]));
       if ((i + 1) % 3 === 0) {
         parts.push(renderAdCard());
       }
@@ -1722,6 +1743,17 @@ async function initHome() {
     feed.innerHTML = mobileHotsearchHTML + parts.join('');
   }
 
+  // 更新手机顶栏的激活状态
+  if (isMobile) {
+    const tabRec = document.getElementById('tab-recommend');
+    const tabFol = document.getElementById('tab-following');
+    if (tabRec && tabFol) {
+      tabRec.classList.toggle('active', currentHomeTab === 'recommend');
+      tabFol.classList.toggle('active', currentHomeTab === 'following');
+    }
+  }
+
+  // 右侧推荐角色 (电脑端用)
   const sidebarRight = document.querySelector('.sidebar-right');
   if (sidebarRight) {
     sidebarRight.innerHTML = `
@@ -1742,6 +1774,13 @@ async function initHome() {
       </div>
     `;
   }
+}
+
+// 切换推荐/关注
+function switchHomeTab(tab) {
+  if (currentHomeTab === tab) return;
+  currentHomeTab = tab;
+  initHome(); // 重新渲染首页
 }
 
 async function initCharacter() {
@@ -3225,6 +3264,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const text = mainEl.textContent.trim();
     if (!text || text.includes('加载中')) {
       mainEl.innerHTML = renderLoadingHTML();
+      injectMobileTopbar();
     }
   }
   bindSearchBox();
@@ -3291,4 +3331,35 @@ function renderMobileTopbar() {
       <a href="search.html" style="margin-left:auto; font-size:20px; text-decoration:none;">🔍</a>
     `;
   }
+}
+
+// ===== 生成手机端专属顶栏 =====
+function injectMobileTopbar() {
+  if (window.innerWidth > 768) return;
+  if (document.getElementById('mobile-topbar')) return; // 防止重复生成
+  
+  const isIndex = location.pathname.split('/').pop() === 'index.html' || location.pathname === '/' || location.pathname.endsWith('/talk/');
+  
+  const topbar = document.createElement('div');
+  topbar.id = 'mobile-topbar';
+  
+  if (isIndex) {
+    topbar.innerHTML = `
+      <a href="index.html" style="font-size:22px; font-weight:800; color:var(--primary-dark); text-decoration:none; letter-spacing:1px;">TALK</a>
+      <div class="mobile-tabs">
+        <span id="tab-recommend" class="active" onclick="switchHomeTab('recommend')">推荐</span>
+        <span id="tab-following" onclick="switchHomeTab('following')">关注</span>
+      </div>
+      <a href="search.html" style="font-size:20px; text-decoration:none;">🔍</a>
+    `;
+  } else {
+    topbar.innerHTML = `
+      <a href="index.html" style="font-size:22px; font-weight:800; color:var(--primary-dark); text-decoration:none; letter-spacing:1px;">TALK</a>
+      <div style="font-size:16px; font-weight:600; color:var(--text);">${document.title.split(' · ')[0] || '页面'}</div>
+      <a href="search.html" style="font-size:20px; text-decoration:none;">🔍</a>
+    `;
+  }
+  
+  // 插入到 body 的最前面
+  document.body.insertBefore(topbar, document.body.firstChild);
 }
