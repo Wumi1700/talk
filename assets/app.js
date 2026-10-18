@@ -1743,16 +1743,6 @@ async function initHome() {
     feed.innerHTML = mobileHotsearchHTML + parts.join('');
   }
 
-  // 更新手机顶栏的激活状态
-  if (isMobile) {
-    const tabRec = document.getElementById('tab-recommend');
-    const tabFol = document.getElementById('tab-following');
-    if (tabRec && tabFol) {
-      tabRec.classList.toggle('active', currentHomeTab === 'recommend');
-      tabFol.classList.toggle('active', currentHomeTab === 'following');
-    }
-  }
-
   // 右侧推荐角色 (电脑端用)
   const sidebarRight = document.querySelector('.sidebar-right');
   if (sidebarRight) {
@@ -1780,7 +1770,21 @@ async function initHome() {
 function switchHomeTab(tab) {
   if (currentHomeTab === tab) return;
   currentHomeTab = tab;
-  initHome(); // 重新渲染首页
+  
+  // 1. 立刻改变顶栏标签的 UI（不依赖数据加载）
+  const tabRec = document.getElementById('tab-recommend');
+  const tabFol = document.getElementById('tab-following');
+  if (tabRec && tabFol) {
+    tabRec.classList.toggle('active', tab === 'recommend');
+    tabFol.classList.toggle('active', tab === 'following');
+  }
+
+  // 2. 清空当前的 feed 并显示加载中
+  const feed = document.getElementById('feed');
+  if (feed) feed.innerHTML = '<div class="empty">加载中...</div>';
+
+  // 3. 重新加载数据
+  initHome(); 
 }
 
 async function initCharacter() {
