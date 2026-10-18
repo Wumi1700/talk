@@ -1169,51 +1169,62 @@ async function submitComment(postId) {
   
   const input = document.getElementById(`comment-input-${postId}`);
   const btn = document.getElementById(`submit-btn-${postId}`);
+  if (!input || !btn) return; 
+
   const content = input.value.trim();
-  
   if (!content) return showToast('请输入评论内容');
   if (content.length > 500) return showToast('评论最多500字');
-  if (await containsSensitiveWord(content)) return showToast('你的内容包含敏感词，请修改后重试');
-  if (containsLink(content)) return showToast('不允许发布外链或联系方式');
 
-  // 查额度
-  const { count: postCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId).eq('user_id', currentUser.id);
-  if (postCount >= 3) return showToast('每帖最多评论3条');
-
-  const today = new Date().toISOString().split('T')[0];
-  const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
-  if (dayCount >= 10) return showToast('每天最多评论10条');
-
-  // 💡 防连点核心：立刻禁用按钮
+  // 💡 核心锁：立刻禁用按钮
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = '发送中...';
   btn.style.opacity = '0.7';
+  let isSaved = false; // 标记是否已经成功存进数据库
 
   try {
+    if (await containsSensitiveWord(content)) throw new Error('你的内容包含敏感词，请修改后重试');
+    if (containsLink(content)) throw new Error('不允许发布外链或联系方式');
+
+    const { count: postCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId).eq('user_id', currentUser.id);
+    if (postCount >= 3) throw new Error('每帖最多评论3条');
+
+    const today = new Date().toISOString().split('T')[0];
+    const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
+    if (dayCount >= 10) throw new Error('每天最多评论10条');
+
     const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content });
     if (error) throw new Error(error.message);
 
-    if (POST_STATS[postId]) POST_STATS[postId].comment_count++;
+    isSaved = true; // 数据已经成功入库！
     showToast('你说了一句话'); 
     
     input.value = '';
-    document.getElementById(`char-count-${postId}`).textContent = '0 / 500';
+    const counter = document.getElementById(`char-count-${postId}`);
+    if (counter) counter.textContent = '0 / 500';
     
-    await loadComments(postId);
-    await checkCommentQuota(postId); // 重新检查并刷新剩余额度显示
-
-    // 刷新外面帖子的评论数字
-    const actionBtn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
-    if (actionBtn) actionBtn.textContent = parseInt(actionBtn.textContent) + 1;
+    // UI 刷新如果报错，不应阻止用户，也不该提示发送失败
+    try {
+      await loadComments(postId);
+      await checkCommentQuota(postId);
+      const actionBtn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
+      if (actionBtn) actionBtn.textContent = parseInt(actionBtn.textContent) + 1;
+    } catch (uiErr) {
+      console.warn('评论已发出，但刷新界面失败', uiErr);
+    }
 
   } catch (err) {
-    showToast('评论失败：' + err.message);
+    if (!isSaved) showToast(err.message || '发送失败');
   } finally {
-    // 💡 防连点核心：恢复按钮
-    btn.disabled = false;
-    btn.textContent = originalText;
-    btn.style.opacity = '1';
+    setTimeout(() => {
+       if (document.body.contains(btn)) {
+           if (!input.disabled) {
+               btn.disabled = false;
+               btn.textContent = originalText;
+               btn.style.opacity = '1';
+           }
+       }
+    }, 500); 
   }
 }
 
@@ -1393,35 +1404,58 @@ async function initMessage() {
 async function submitMessage(charHandle) {
   if (!currentUser) return showToast('请先登录');
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
+  
   const input = $('#message-input');
+  const btn = document.querySelector('button[onclick^="submitMessage"]');
+  if (!input || !btn) return;
+
   const content = input.value.trim();
-  if (await containsSensitiveWord(content)) {
-    return showToast('你的内容包含敏感词，请修改后重试');
-  }
-  if (containsLink(content)) return showToast('不允许发布外链或联系方式');
   if (!content) return showToast('请输入内容');
   if (content.length > 1000) return showToast('私信最多1000字');
 
-  const { data: { user } } = await db.auth.getUser();
-  const hoursSince = (Date.now() - new Date(user.created_at).getTime()) / 1000 / 3600;
-  if (hoursSince < 24) return showToast('注册后 24 小时内不能私信');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  btn.style.opacity = '0.7';
+  let isSaved = false;
 
-  const used = await getMonthlyMessageCount();
-  if (used >= 4) return showToast('本月私信额度已用完（共4条）');
+  try {
+    if (await containsSensitiveWord(content)) throw new Error('你的内容包含敏感词，请修改后重试');
+    if (containsLink(content)) throw new Error('不允许发布外链或联系方式');
 
-  const { error } = await db.from('messages').insert({ user_id: currentUser.id, character_id: charHandle, content: content });
-  if (error) return showToast('发送失败：' + error.message);
+    const { data: { user } } = await db.auth.getUser();
+    const hoursSince = (Date.now() - new Date(user.created_at).getTime()) / 1000 / 3600;
+    if (hoursSince < 24) throw new Error('注册后 24 小时内不能私信');
 
-  await db.from('notifications').insert({
-    user_id: currentUser.id,
-    type: 'message',
-    target_id: '你的私信已送达，等待角色回复',
-    is_read: false
-  });
+    const used = await getMonthlyMessageCount();
+    if (used >= 4) throw new Error('本月私信额度已用完（共4条）');
 
-  showToast('信已经送出去了');
-  input.value = '';
-  await initMessage();
+    const { error } = await db.from('messages').insert({ user_id: currentUser.id, character_id: charHandle, content: content });
+    if (error) throw new Error(error.message);
+
+    await db.from('notifications').insert({
+      user_id: currentUser.id,
+      type: 'message',
+      target_id: '你的私信已送达，等待角色回复',
+      is_read: false
+    });
+
+    isSaved = true;
+    showToast('信已经送出去了');
+    input.value = '';
+    await initMessage(); 
+
+  } catch (err) {
+    if (!isSaved) showToast(err.message || '发送失败');
+  } finally {
+    setTimeout(() => {
+      if (document.body.contains(btn)) {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.style.opacity = '1';
+      }
+    }, 500);
+  }
 }
 
 // ===== 用户统计 =====
