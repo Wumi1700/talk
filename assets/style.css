@@ -397,14 +397,18 @@ a:hover { text-decoration: underline; }
   opacity: 1;
 }
 
-/* ================= 手机版适配（屏幕宽度 < 768px） ================= */
+/* ================= 手机版全局适配（屏幕宽度 < 768px） ================= */
+/* 默认在电脑端隐藏底部导航和专属区域 */
+.mobile-bottom-nav { display: none; }
+.mobile-only-section { display: none; }
+
 @media (max-width: 768px) {
   /* 1. 隐藏左右侧边栏 */
   .sidebar-left, .sidebar-right {
     display: none !important;
   }
   
-  /* 2. 主内容区撑满屏幕 */
+  /* 2. 主内容区撑满屏幕，底部留出导航栏的空间 */
   .layout {
     grid-template-columns: 1fr !important;
     padding: 10px 10px 80px 10px !important;
@@ -420,7 +424,7 @@ a:hover { text-decoration: underline; }
   }
   .logo { font-size: 20px; }
 
-  /* 4. 底部导航栏（默认隐藏，手机端显示） */
+  /* 4. 底部导航栏样式 */
   .mobile-bottom-nav {
     display: flex !important;
     position: fixed;
@@ -472,10 +476,23 @@ a:hover { text-decoration: underline; }
   .profile-header { padding: 0 12px 16px; }
   .profile-avatar { width: 72px; height: 72px; margin-top: -30px; }
 
-  /* 7. 手机版专属的热搜和论坛顶部容器 */
-  .mobile-only-section { display: block !important; margin-bottom: 16px; }
+  /* 7. 弹窗的移动端适配（注册/登录/做题） */
+  #auth-modal > div, 
+  #faction-modal > div {
+    width: 95% !important;
+    padding: 16px !important;
+    max-height: 90vh !important;
+    border-radius: 16px !important;
+  }
+  #faction-modal-content button.btn {
+    padding: 14px 12px !important;
+    font-size: 15px !important;
+    word-wrap: break-word !important;
+    height: auto !important;
+    text-align: left !important;
+  }
+  #faction-modal-content h3 {
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+  }
 }
-
-/* 电脑端默认隐藏移动端专属区域和底部导航 */
-.mobile-bottom-nav { display: none; }
-.mobile-only-section { display: none; }
