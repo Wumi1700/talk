@@ -2892,7 +2892,10 @@ async function initSearch() {
   if (!matchedChars.length && !matchedPosts.length) {
     root.innerHTML = `
       <div class="card"><h3>搜索：${escapeText(q)}</h3></div>
-      <div class="empty">没有找到相关内容</div>
+      <div class="empty" style="padding: 40px; text-align: center;">
+        <div style="font-size: 40px; margin-bottom: 10px;">🧹</div>
+        扫得干干净净，什么也没找到。
+      </div>
     `;
     return;
   }
@@ -3310,7 +3313,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ===== 注入手机版底部导航 =====
 function injectMobileNav() {
-  if (document.getElementById('mobile-nav')) return; // 防止重复注入
+  if (window.innerWidth > 768) return; // 👈 绝对保护电脑端
+  if (document.getElementById('mobile-nav')) return;
   
   const nav = document.createElement('nav');
   nav.id = 'mobile-nav';
@@ -3319,23 +3323,21 @@ function injectMobileNav() {
   const unread = _unreadCache.count || 0;
   const path = location.pathname.split('/').pop() || 'index.html';
   
+  // 极简线条 SVG 图标
+  const iconHome = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`;
+  const iconForum = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`;
+  const iconNotice = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`;
+  const iconMsg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`;
+  const iconMe = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+
   nav.innerHTML = `
-    <a href="index.html" class="${path === 'index.html' ? 'active' : ''}">
-      <span class="nav-icon">🏠</span>首页
-    </a>
-    <a href="forum.html" class="${path === 'forum.html' ? 'active' : ''}">
-      <span class="nav-icon">⚔️</span>论坛
-    </a>
-    <a href="notifications.html" class="${path === 'notifications.html' ? 'active' : ''}">
-      <span class="nav-icon">🔔</span>通知
+    <a href="index.html" class="${path === 'index.html' ? 'active' : ''}"><span class="nav-icon">${iconHome}</span>首页</a>
+    <a href="forum.html" class="${path === 'forum.html' ? 'active' : ''}"><span class="nav-icon">${iconForum}</span>论坛</a>
+    <a href="notifications.html" class="${path === 'notifications.html' ? 'active' : ''}"><span class="nav-icon">${iconNotice}</span>通知
       ${unread > 0 ? `<span class="badge" id="mobile-unread-badge" style="display:block;">${unread}</span>` : `<span class="badge" id="mobile-unread-badge" style="display:none;">0</span>`}
     </a>
-    <a href="message.html" class="${path === 'message.html' ? 'active' : ''}">
-      <span class="nav-icon">✉️</span>私信
-    </a>
-    <a href="profile.html" class="${path === 'profile.html' ? 'active' : ''}">
-      <span class="nav-icon">👤</span>我的
-    </a>
+    <a href="message.html" class="${path === 'message.html' ? 'active' : ''}"><span class="nav-icon">${iconMsg}</span>私信</a>
+    <a href="profile.html" class="${path === 'profile.html' ? 'active' : ''}"><span class="nav-icon">${iconMe}</span>我的</a>
   `;
   document.body.appendChild(nav);
 }
