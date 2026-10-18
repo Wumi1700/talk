@@ -1166,15 +1166,17 @@ async function submitComment(postId) {
   if (!currentUser) return showToast('请先登录');
   if (forumReadOnly) return showToast('你不是这个阵营的成员');
   if (currentProfile && currentProfile.is_banned) return showToast('你已被放逐，无法互动');
+  
   const input = document.getElementById(`comment-input-${postId}`);
+  const btn = document.getElementById(`submit-btn-${postId}`);
   const content = input.value.trim();
-  if (await containsSensitiveWord(content)) {
-    return showToast('你的内容包含敏感词，请修改后重试');
-  }
-  if (containsLink(content)) return showToast('不允许发布外链或联系方式');
+  
   if (!content) return showToast('请输入评论内容');
   if (content.length > 500) return showToast('评论最多500字');
+  if (await containsSensitiveWord(content)) return showToast('你的内容包含敏感词，请修改后重试');
+  if (containsLink(content)) return showToast('不允许发布外链或联系方式');
 
+  // 查额度
   const { count: postCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId).eq('user_id', currentUser.id);
   if (postCount >= 3) return showToast('每帖最多评论3条');
 
@@ -1182,14 +1184,37 @@ async function submitComment(postId) {
   const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
   if (dayCount >= 10) return showToast('每天最多评论10条');
 
-  const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content });
-  if (error) return showToast('评论失败：' + error.message);
-  if (POST_STATS[postId]) POST_STATS[postId].comment_count++;
-  showToast('你说了一句话');
-  input.value = '';
-  await loadComments(postId);
-  const btn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
-  if (btn) btn.textContent = parseInt(btn.textContent) + 1;
+  // 💡 防连点核心：立刻禁用按钮
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  btn.style.opacity = '0.7';
+
+  try {
+    const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content });
+    if (error) throw new Error(error.message);
+
+    if (POST_STATS[postId]) POST_STATS[postId].comment_count++;
+    showToast('你说了一句话'); 
+    
+    input.value = '';
+    document.getElementById(`char-count-${postId}`).textContent = '0 / 500';
+    
+    await loadComments(postId);
+    await checkCommentQuota(postId); // 重新检查并刷新剩余额度显示
+
+    // 刷新外面帖子的评论数字
+    const actionBtn = document.querySelector(`.post[data-id="${postId}"] .action:nth-child(2) span`);
+    if (actionBtn) actionBtn.textContent = parseInt(actionBtn.textContent) + 1;
+
+  } catch (err) {
+    showToast('评论失败：' + err.message);
+  } finally {
+    // 💡 防连点核心：恢复按钮
+    btn.disabled = false;
+    btn.textContent = originalText;
+    btn.style.opacity = '1';
+  }
 }
 
 async function deleteOwnComment(commentId, postId) {
@@ -1777,14 +1802,72 @@ async function initPost() {
     <div class="card" style="margin-top:16px">
       <h3>评论</h3>
       <div id="comments-list-${post.id}" style="margin-top:10px;"></div>
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <input id="comment-input-${post.id}" type="text" maxlength="500" placeholder="${forumReadOnly ? '你不是这个阵营的成员' : '写下你的评论（最多500字）'}" ${forumReadOnly ? 'disabled' : ''} style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;${forumReadOnly ? 'opacity:0.5;' : ''}">
-        <button class="btn btn-primary" onclick="submitComment('${post.id}')" ${forumReadOnly ? 'disabled style="opacity:0.5;"' : ''}>发送</button>
+      
+      <div style="position:relative; margin-top:12px;">
+        <textarea id="comment-input-${post.id}" maxlength="500" rows="3" placeholder="${forumReadOnly ? '你不是这个阵营的成员，无法评论。' : '友善是交流的起点，发一条友善的评论吧~'}" ${forumReadOnly ? 'disabled' : ''} oninput="updateCharCount('${post.id}')" style="width:100%; padding:12px; padding-bottom:24px; border:1px solid var(--border); border-radius:8px; font-family:inherit; resize:vertical; font-size:14px; outline:none; ${forumReadOnly ? 'opacity:0.5; background:#f5f5f5;' : ''}"></textarea>
+        <span id="char-count-${post.id}" style="position:absolute; right:12px; bottom:10px; font-size:12px; color:var(--muted);">0 / 500</span>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px;">每帖最多3条，每天最多10条。先发后审。</div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+        <div id="quota-msg-${post.id}" style="font-size:12px; color:var(--muted);">
+          <!-- 额度提示会由 JS 自动填入 -->
+        </div>
+        <button class="btn btn-primary" id="submit-btn-${post.id}" onclick="submitComment('${post.id}')" ${forumReadOnly ? 'disabled style="opacity:0.5;"' : ''}>发送</button>
+      </div>
     </div>
   `;
   await loadComments(post.id);
+  await checkCommentQuota(post.id);
+}
+
+// 实时字数统计
+function updateCharCount(postId) {
+  const input = document.getElementById(`comment-input-${postId}`);
+  const counter = document.getElementById(`char-count-${postId}`);
+  if (input && counter) {
+    counter.textContent = `${input.value.length} / 500`;
+  }
+}
+
+// 检查并显示额度
+async function checkCommentQuota(postId) {
+  const quotaEl = document.getElementById(`quota-msg-${postId}`);
+  if (!quotaEl) return;
+  
+  if (!currentUser) {
+    quotaEl.innerHTML = '请先登录后再发表评论。';
+    return;
+  }
+
+  // 检查新用户 24 小时墙
+  const { data: { user } } = await db.auth.getUser();
+  const hoursSince = (Date.now() - new Date(user.created_at).getTime()) / 3600000;
+  if (hoursSince < 24) {
+    quotaEl.innerHTML = '⚠️ 新旅者降临未满 24 小时，暂时无法发言。';
+    document.getElementById(`comment-input-${postId}`).disabled = true;
+    document.getElementById(`submit-btn-${postId}`).disabled = true;
+    document.getElementById(`submit-btn-${postId}`).style.opacity = '0.5';
+    return;
+  }
+
+  // 查今天发了多少
+  const today = new Date().toISOString().split('T')[0];
+  const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
+  
+  // 查本贴发了多少
+  const { count: postCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', postId).eq('user_id', currentUser.id);
+
+  const remainDay = Math.max(0, 10 - (dayCount || 0));
+  const remainPost = Math.max(0, 3 - (postCount || 0));
+
+  if (remainDay === 0 || remainPost === 0) {
+    quotaEl.innerHTML = `<span style="color:#dc3545;">今日额度已用完，明天再来吧~</span>`;
+    document.getElementById(`comment-input-${postId}`).disabled = true;
+    document.getElementById(`submit-btn-${postId}`).disabled = true;
+    document.getElementById(`submit-btn-${postId}`).style.opacity = '0.5';
+  } else {
+    quotaEl.innerHTML = `每日剩余 <b>${remainDay}</b> 条 · 本贴剩余 <b>${remainPost}</b> 条`;
+  }
 }
 
 // ===== 12. 设置页 =====
