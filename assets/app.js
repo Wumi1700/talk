@@ -394,6 +394,7 @@ async function checkUser() {
     } else {
       updateUIForLoggedOut();
     }
+    injectMobileNav();
     applyFactionTheme();
     if (typeof renderSidebar === 'function') await renderSidebar();
     if (typeof checkNewReplies === 'function') checkNewReplies();
@@ -1675,7 +1676,21 @@ async function initHome() {
   });
 
   const feed = $('#feed');
+  const isMobile = window.innerWidth <= 768;
+  const mobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
+
   if (!sortedPosts.length) {
+    feed.innerHTML = mobileHotsearchHTML + '<div class="empty">还没有动态</div>';
+  } else {
+    const parts = [];
+    for (let i = 0; i < sortedPosts.length; i++) {
+      parts.push(renderPostCard(sortedPosts[i]));
+      if ((i + 1) % 3 === 0) {
+        parts.push(renderAdCard());
+      }
+    }
+    feed.innerHTML = mobileHotsearchHTML + parts.join('');
+  }
     feed.innerHTML = '<div class="empty">还没有动态</div>';
   } else {
     const parts = [];
@@ -2276,31 +2291,38 @@ async function updateUnreadBadge() {
   if (!currentUser) return;
   _unreadCache.t = 0;
   const unread = await getUnreadCount();
+  
+  // 1. 更新电脑版左侧边栏红点
   const link = document.querySelector('.sidebar-left a[href="notifications.html"]');
-  if (!link) return;
-  const oldBadge = link.querySelector('.unread-badge');
-  if (unread > 0) {
-    if (oldBadge) {
-      oldBadge.textContent = unread;
-    } else {
-      const span = document.createElement('span');
-      span.className = 'unread-badge';
-      span.style.cssText = 'margin-left:auto;background:#E76F51;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;';
-      span.textContent = unread;
-      link.appendChild(span);
+  if (link) {
+    const oldBadge = link.querySelector('.unread-badge');
+    if (unread > 0) {
+      if (oldBadge) {
+        oldBadge.textContent = unread;
+      } else {
+        const span = document.createElement('span');
+        span.className = 'unread-badge';
+        span.style.cssText = 'margin-left:auto;background:#E76F51;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;';
+        span.textContent = unread;
+        link.appendChild(span);
+      }
+    } else if (oldBadge) {
+      oldBadge.remove();
     }
-  } else if (oldBadge) {
-    oldBadge.remove();
+  }
+
+  // 2. 更新手机版底部导航红点
+  const mobileBadge = document.getElementById('mobile-unread-badge');
+  if (mobileBadge) {
+    if (unread > 0) {
+      mobileBadge.textContent = unread;
+      mobileBadge.style.display = 'block';
+    } else {
+      mobileBadge.style.display = 'none';
+    }
   }
 }
 
-setInterval(() => {
-  if (currentUser) {
-    updateUnreadBadge();
-  }
-}, 30000);
-
-let CHECKING_REPLIES = false;
 async function checkNewReplies() {
   if (!currentUser || CHECKING_REPLIES) return;
   if (window._lastRepliesCheck && Date.now() - window._lastRepliesCheck < 60000) return;
@@ -2648,8 +2670,20 @@ async function initForum() {
   const myEvents = filterEventsByFaction(activeEvents, myFaction);
   const eventBanner = renderEventBanner(myEvents);
 
-  const topBanner = eventBanner + `
-    <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
+  const isMobile = window.innerWidth <= 768;
+  let mobileFactionTabs = '';
+  if (isMobile) {
+    const allFactions = ['精灵', '矮人', '人类', '异人', '240', '246', '240-1'];
+    mobileFactionTabs = `
+      <div style="overflow-x:auto; white-space:nowrap; padding-bottom:10px; margin-bottom:10px; -webkit-overflow-scrolling: touch;">
+        ${allFactions.map(f => `
+          <a href="forum.html?faction=${f}" style="display:inline-block; padding:8px 16px; margin-right:8px; border-radius:999px; text-decoration:none; font-size:14px; font-weight:600; ${viewingFaction === f ? 'background:var(--primary); color:#fff;' : 'background:var(--bg); color:var(--text);'}">
+            ${factionIcon(f)} ${f}
+          </a>
+        `).join('')}
+      </div>
+    `;
+  }
       <h3>${factionIcon(viewingFaction)} ${viewingFaction} · 论坛 ${isOwn ? '' : '<span style="font-size:12px;color:var(--text-muted);font-weight:400;">（仅浏览）</span>'}</h3>
       <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">
         ${isOwn ? '这里是你的阵营论坛。' : '你正在浏览其他阵营的论坛，只能查看，不能互动。'}
@@ -2661,7 +2695,7 @@ async function initForum() {
     ? posts.map(p => renderPostCard(p)).join('')
     : '<div class="empty">这个阵营还没有帖子</div>';
 
-  root.innerHTML = topBanner + postsHTML;
+  root.innerHTML = mobileFactionTabs + topBanner + postsHTML;
 
   if (sidebarRight) {
     const allFactions = ['精灵', '矮人', '人类', '异人', '240', '246', '240-1'];
@@ -3170,3 +3204,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   bindSearchBox();
 });
+
+// ===== 注入手机版底部导航 =====
+function injectMobileNav() {
+  if (document.getElementById('mobile-nav')) return; // 防止重复注入
+  
+  const nav = document.createElement('nav');
+  nav.id = 'mobile-nav';
+  nav.className = 'mobile-bottom-nav';
+  
+  const unread = _unreadCache.count || 0;
+  const path = location.pathname.split('/').pop() || 'index.html';
+  
+  nav.innerHTML = `
+    <a href="index.html" class="${path === 'index.html' ? 'active' : ''}">
+      <span class="nav-icon">🏠</span>首页
+    </a>
+    <a href="forum.html" class="${path === 'forum.html' ? 'active' : ''}">
+      <span class="nav-icon">⚔️</span>论坛
+    </a>
+    <a href="notifications.html" class="${path === 'notifications.html' ? 'active' : ''}">
+      <span class="nav-icon">🔔</span>通知
+      ${unread > 0 ? `<span class="badge" id="mobile-unread-badge" style="display:block;">${unread}</span>` : `<span class="badge" id="mobile-unread-badge" style="display:none;">0</span>`}
+    </a>
+    <a href="message.html" class="${path === 'message.html' ? 'active' : ''}">
+      <span class="nav-icon">✉️</span>私信
+    </a>
+    <a href="profile.html" class="${path === 'profile.html' ? 'active' : ''}">
+      <span class="nav-icon">👤</span>我的
+    </a>
+  `;
+  document.body.appendChild(nav);
+}
