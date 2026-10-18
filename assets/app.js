@@ -1490,15 +1490,16 @@ function renderAchievements(s) {
     { icon: '🔒', name: '无法注销', desc: '尝试逃离 TALK，但被系统无情驳回。', unlocked: !!s.cannot_leave },
   ];
   const unlockedCount = list.filter(a => a.unlocked).length;
+  
   return `
-    <div class="card">
+    <div class="card achievements-card">
       <h3>成就 <span style="font-size:13px;color:var(--muted);font-weight:400;">已解锁 ${unlockedCount} / ${list.length}</span></h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px;">
+      <div class="achievements-grid">
         ${list.map(a => `
-          <div style="text-align:center;padding:14px 8px;border-radius:10px;background:${a.unlocked ? 'var(--primary-light)' : 'var(--bg)'};border:1px solid ${a.unlocked ? 'var(--primary)' : 'var(--border)'};opacity:${a.unlocked ? 1 : 0.55};">
-            <div style="font-size:28px;margin-bottom:6px;filter:${a.unlocked ? 'none' : 'grayscale(1)'};">${a.icon}</div>
-            <div style="font-size:13px;font-weight:600;color:${a.unlocked ? 'var(--primary-dark)' : 'var(--text-muted)'};">${a.name}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4;">${a.desc}</div>
+          <div class="achievement-item" style="background:${a.unlocked ? 'var(--primary-light)' : 'var(--bg)'}; border:1px solid ${a.unlocked ? 'var(--primary)' : 'var(--border)'}; opacity:${a.unlocked ? 1 : 0.55};" title="${a.name}：${a.desc}">
+            <div class="ach-icon" style="filter:${a.unlocked ? 'none' : 'grayscale(1)'};">${a.icon}</div>
+            <div class="ach-name" style="color:${a.unlocked ? 'var(--primary-dark)' : 'var(--text-muted)'};">${a.name}</div>
+            <div class="ach-desc">${a.desc}</div>
           </div>
         `).join('')}
       </div>
@@ -1533,59 +1534,80 @@ async function initProfile() {
   const repliedCount = stats.replied;
   const joinedDays = stats.joinedDays;
 
+  // 专门为双端兼容设计的结构
   root.innerHTML = `
-    <div class="card" style="padding:0;overflow:hidden;">
-      <div style="height:160px;${bannerStyle}"></div>
-      <div style="padding:0 20px 20px;">
-        <div style="margin-top:-48px;display:flex;align-items:flex-end;gap:16px;">
-          <div style="border:4px solid #fff;border-radius:50%;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.08);">${userAvatarHTML(currentProfile, 96)}</div>
-          <div style="padding-bottom:8px;flex:1;">
-            <div style="font-size:22px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              ${username}
-            </div>
-            <div style="font-size:14px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <span style="display:inline-flex;align-items:center;gap:4px;background:var(--primary-light);color:var(--primary-dark);padding:2px 10px;border-radius:999px;font-weight:600;font-size:13px;">
+    <div class="card profile-card" style="padding:0; overflow:hidden;">
+      <div class="profile-banner" style="${bannerStyle}"></div>
+      
+      <div class="profile-body" style="padding:0 20px 20px;">
+        <div class="profile-avatar-row" style="display:flex; align-items:flex-end; gap:16px; margin-top:-48px;">
+          <!-- 头像 -->
+          <div class="profile-avatar-wrapper" style="border:4px solid #fff; border-radius:50%; background:#fff; box-shadow:0 2px 12px rgba(0,0,0,0.08); flex-shrink:0;">
+            ${userAvatarHTML(currentProfile, 96)}
+          </div>
+          
+          <!-- 右侧信息（名字、阵营、数据） -->
+          <div class="profile-info-col" style="flex:1; padding-bottom:8px;">
+            <div class="profile-name-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:22px; font-weight:800;">${username}</span>
+              <span style="display:inline-flex; align-items:center; gap:4px; background:var(--primary-light); color:var(--primary-dark); padding:2px 10px; border-radius:999px; font-weight:600; font-size:13px;">
                 ${factionIcon(faction)} ${currentProfile.route ? currentProfile.route + ' · ' : ''}${faction} · ${title}
               </span>
             </div>
+            <!-- 电脑端隐藏数据行，移动端显示 -->
+            <div class="profile-stats-row mobile-only-flex" style="display:none; gap:20px; margin-top:12px; font-size:12px; color:var(--muted);">
+              <div style="text-align:center;"><b style="font-size:16px;color:var(--text);">${followCount}</b><br>关注</div>
+              <div style="text-align:center;"><b style="font-size:16px;color:var(--text);">${likeCount}</b><br>点赞</div>
+              <div style="text-align:center;"><b style="font-size:16px;color:var(--text);">${bookmarkCount}</b><br>收藏</div>
+              <div style="text-align:center;"><b style="font-size:16px;color:var(--text);">${commentCount}</b><br>评论</div>
+            </div>
           </div>
-          <div style="padding-bottom:8px;">
+          
+          <!-- 电脑端显示的编辑按钮 -->
+          <div class="profile-action-col" style="padding-bottom:8px;">
             <a href="settings.html" class="btn" style="font-size:13px;">编辑资料</a>
           </div>
         </div>
 
-        <div style="margin-top:16px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;">
+        <div style="margin-top:16px; font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word;">
           ${currentProfile.bio ? currentProfile.bio.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '<span style="color:var(--muted);">还没有填写简介</span>'}
         </div>
 
-        <div style="margin-top:12px;font-size:13px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap;">
+        <div style="margin-top:12px; font-size:13px; color:var(--muted); display:flex; gap:20px; flex-wrap:wrap;">
           <span>📅 ${createdAt} 加入 · 已活跃 <b style="color:var(--primary-dark);">${joinedDays}</b> 天</span>
           ${currentProfile.location ? `<span>📍 ${currentProfile.location.replace(/</g,'&lt;')}</span>` : ''}
           ${repliedCount > 0 ? `<span>💬 被角色回复过 <b style="color:var(--primary-dark);">${repliedCount}</b> 次</span>` : ''}
         </div>
+
+        <!-- 移动端专属的超大编辑按钮 -->
+        <div class="mobile-only-block" style="display:none; margin-top:16px;">
+          <a href="settings.html" class="btn" style="display:block; width:100%; text-align:center; padding:10px; border-radius:999px; border-color:var(--border); font-weight:600;">编辑资料</a>
+        </div>
       </div>
     </div>
 
-    <div class="card" style="display:flex;justify-content:space-around;text-align:center;padding:16px 8px;">
+    <!-- 电脑端专属的单独数据卡片 -->
+    <div class="card desktop-only-flex" style="display:flex; justify-content:space-around; text-align:center; padding:16px 8px;">
       <div>
-        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${followCount}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">关注角色</div>
+        <div style="font-size:20px; font-weight:800; color:var(--primary-dark);">${followCount}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">关注角色</div>
       </div>
       <div>
-        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${likeCount}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">点赞</div>
+        <div style="font-size:20px; font-weight:800; color:var(--primary-dark);">${likeCount}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">点赞</div>
       </div>
       <div>
-        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${bookmarkCount}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">收藏</div>
+        <div style="font-size:20px; font-weight:800; color:var(--primary-dark);">${bookmarkCount}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">收藏</div>
       </div>
       <div>
-        <div style="font-size:20px;font-weight:800;color:var(--primary-dark);">${commentCount}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">评论</div>
+        <div style="font-size:20px; font-weight:800; color:var(--primary-dark);">${commentCount}</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">评论</div>
       </div>
     </div>
 
-${renderAchievements({ follow: followCount, like: likeCount, bookmark: bookmarkCount, comment: commentCount, message: 0, replied: repliedCount, joinedDays, cannot_leave: !!currentProfile.cannot_leave })}
+    ${renderAchievements({ follow: followCount, like: likeCount, bookmark: bookmarkCount, comment: commentCount, message: 0, replied: repliedCount, joinedDays, cannot_leave: !!currentProfile.cannot_leave })}
+    
     <div class="profile-tabs" id="profile-tabs">
       <button class="active" data-tab="follows">我的关注</button>
       <button data-tab="likes">我的点赞</button>
