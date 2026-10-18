@@ -2314,6 +2314,7 @@ async function updateUnreadBadge() {
   }
 }
 
+let CHECKING_REPLIES = false;
 async function checkNewReplies() {
   if (!currentUser || CHECKING_REPLIES) return;
   if (window._lastRepliesCheck && Date.now() - window._lastRepliesCheck < 60000) return;
