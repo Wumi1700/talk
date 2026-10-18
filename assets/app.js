@@ -2661,6 +2661,7 @@ async function initForum() {
   const myEvents = filterEventsByFaction(activeEvents, myFaction);
   const eventBanner = renderEventBanner(myEvents);
 
+  // 手机端顶部横向阵营标签
   const isMobile = window.innerWidth <= 768;
   let mobileFactionTabs = '';
   if (isMobile) {
@@ -2675,6 +2676,10 @@ async function initForum() {
       </div>
     `;
   }
+
+  // 拼装顶部板块提示
+  const topBanner = eventBanner + `
+    <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
       <h3>${factionIcon(viewingFaction)} ${viewingFaction} · 论坛 ${isOwn ? '' : '<span style="font-size:12px;color:var(--text-muted);font-weight:400;">（仅浏览）</span>'}</h3>
       <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">
         ${isOwn ? '这里是你的阵营论坛。' : '你正在浏览其他阵营的论坛，只能查看，不能互动。'}
