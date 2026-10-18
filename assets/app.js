@@ -2690,9 +2690,9 @@ async function initForum() {
   if (isMobile) {
     const allFactions = ['精灵', '矮人', '人类', '异人', '240', '246', '240-1'];
     mobileFactionTabs = `
-      <div style="overflow-x:auto; white-space:nowrap; padding-bottom:10px; margin-bottom:10px; -webkit-overflow-scrolling: touch;">
+      <div class="forum-tabs-scroll">
         ${allFactions.map(f => `
-          <a href="forum.html?faction=${f}" style="display:inline-block; padding:8px 16px; margin-right:8px; border-radius:999px; text-decoration:none; font-size:14px; font-weight:600; ${viewingFaction === f ? 'background:var(--primary); color:#fff;' : 'background:var(--bg); color:var(--text);'}">
+          <a href="forum.html?faction=${f}" style="${viewingFaction === f ? 'background:var(--primary); color:#fff; font-weight:bold;' : 'background:var(--bg); color:var(--text);'}">
             ${factionIcon(f)} ${f}
           </a>
         `).join('')}
@@ -3254,4 +3254,35 @@ function injectMobileNav() {
     </a>
   `;
   document.body.appendChild(nav);
+}
+
+// ===== 手机端极简顶栏替换 =====
+function renderMobileTopbar() {
+  if (window.innerWidth > 768) return;
+  const topbarInner = document.querySelector('.topbar-inner');
+  if (!topbarInner) return;
+  
+  const path = location.pathname.split('/').pop() || 'index.html';
+  
+  if (path === 'index.html') {
+    topbarInner.innerHTML = `
+      <a href="index.html" class="logo" style="font-size:22px; font-weight:800; color:var(--primary-dark); text-decoration:none;">TALK</a>
+      <div style="display:flex; gap:20px; margin-left:20px; font-size:16px;">
+        <span style="font-weight:bold; color:var(--text);">推荐</span>
+        <span style="color:var(--muted);">关注</span>
+      </div>
+      <a href="search.html" style="margin-left:auto; font-size:20px; text-decoration:none;">🔍</a>
+    `;
+  } else if (path === 'forum.html') {
+    topbarInner.innerHTML = `
+      <a href="index.html" class="logo" style="font-size:22px; font-weight:800; color:var(--primary-dark); text-decoration:none;">TALK</a>
+      <div style="margin-left:20px; font-size:16px; font-weight:bold;">论坛</div>
+      <a href="search.html" style="margin-left:auto; font-size:20px; text-decoration:none;">🔍</a>
+    `;
+  } else {
+    topbarInner.innerHTML = `
+      <a href="index.html" class="logo" style="font-size:22px; font-weight:800; color:var(--primary-dark); text-decoration:none;">TALK</a>
+      <a href="search.html" style="margin-left:auto; font-size:20px; text-decoration:none;">🔍</a>
+    `;
+  }
 }
