@@ -1514,7 +1514,13 @@ async function initProfile() {
   await loadPostStats();
   const root = $('#user-profile');
   if (!currentUser || !currentProfile) {
-    root.innerHTML = '<div class="empty">请先登录后再查看个人主页</div>';
+    root.innerHTML = `
+      <div class="empty" style="padding: 60px 20px; text-align: center;">
+        <div style="font-size: 40px; margin-bottom: 16px;">👤</div>
+        <p style="margin-bottom: 20px; color: var(--muted);">你还没有登录，无法查看个人主页</p>
+        <button class="btn btn-primary" onclick="openAuthModal()" style="padding: 10px 30px; border-radius: 20px;">立即登录 / 注册</button>
+      </div>
+    `;
     return;
   }
 
