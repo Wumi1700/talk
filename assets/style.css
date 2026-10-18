@@ -485,3 +485,59 @@ a:hover { text-decoration: underline; }
   .mobile-bottom-nav a.active { color: var(--primary-dark); }
   .mobile-bottom-nav .nav-icon { font-size: 18px; margin-bottom: 1px; } /* 变小 */
 }
+
+/* ===== 修复电脑端（大屏幕）的成就样式，恢复为原来的大卡片 ===== */
+@media (min-width: 769px) {
+  .achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .achievement-item {
+    padding: 14px 8px;
+    border-radius: 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .ach-icon { font-size: 28px; margin-bottom: 6px; }
+  .ach-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .ach-desc { font-size: 11px; line-height: 1.4; } /* 电脑端显示文字 */
+}
+
+/* 默认隐藏手机顶栏 */
+#mobile-topbar { display: none; }
+
+/* 手机端专属配置 */
+@media (max-width: 768px) {
+  .topbar { display: none !important; } /* 隐藏原本的电脑顶栏 */
+  
+  #mobile-topbar {
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .mobile-tabs {
+    display: flex;
+    gap: 20px;
+    font-size: 16px;
+  }
+  .mobile-tabs span {
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .mobile-tabs span.active {
+    color: var(--text);
+    font-weight: bold;
+  }
+}
