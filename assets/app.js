@@ -1676,6 +1676,8 @@ async function initHome() {
   });
 
   const feed = $('#feed');
+  
+  // 手机版热搜注入
   const isMobile = window.innerWidth <= 768;
   const mobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
 
@@ -1690,17 +1692,6 @@ async function initHome() {
       }
     }
     feed.innerHTML = mobileHotsearchHTML + parts.join('');
-  }
-    feed.innerHTML = '<div class="empty">还没有动态</div>';
-  } else {
-    const parts = [];
-    for (let i = 0; i < sortedPosts.length; i++) {
-      parts.push(renderPostCard(sortedPosts[i]));
-      if ((i + 1) % 3 === 0) {
-        parts.push(renderAdCard());
-      }
-    }
-    feed.innerHTML = parts.join('');
   }
 
   const sidebarRight = document.querySelector('.sidebar-right');
