@@ -2825,16 +2825,50 @@ async function initSearch() {
 
   const root = $('#search-app');
   const q = new URLSearchParams(location.search).get('q') || '';
-
-  const searchInput = document.querySelector('.search-box input');
-  if (searchInput && q) searchInput.value = q;
-
-  if (!q) {
+  
+  // 判断是不是手机端
+  const isMobile = window.innerWidth <= 768;
+  
+  // 如果是手机端，强行在主内容区插入一个搜索框
+  if (isMobile) {
     root.innerHTML = `
-      <div class="card"><h3>搜索</h3></div>
-      <div class="empty">输入关键词，搜索角色、帖子、标签</div>
+      <div class="card" style="padding: 12px; margin-bottom: 16px;">
+        <div style="display:flex; gap:8px;">
+          <input id="mobile-search-input" type="text" value="${escapeText(q)}" placeholder="搜索角色、帖子、标签…" style="flex:1; padding:10px; border:1px solid var(--border); border-radius:8px; outline:none;">
+          <button class="btn btn-primary" onclick="doMobileSearch()" style="padding:0 16px;">搜索</button>
+        </div>
+      </div>
+      <div id="search-results-area"></div>
     `;
-    return;
+    
+    // 监听回车键
+    setTimeout(() => {
+      const input = document.getElementById('mobile-search-input');
+      if (input) {
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') doMobileSearch();
+        });
+      }
+    }, 100);
+    
+    // 如果没带参数，直接退出
+    if (!q) return;
+    
+    // 如果带了参数，后续的结果渲染到 search-results-area 中
+    var renderTarget = document.getElementById('search-results-area');
+  } else {
+    // 电脑端原本的逻辑
+    const searchInput = document.querySelector('.search-box input');
+    if (searchInput && q) searchInput.value = q;
+
+    if (!q) {
+      root.innerHTML = `
+        <div class="card"><h3>搜索</h3></div>
+        <div class="empty">输入关键词，搜索角色、帖子、标签</div>
+      `;
+      return;
+    }
+    var renderTarget = root;
   }
 
   const lowerQ = q.toLowerCase();
@@ -2893,7 +2927,7 @@ async function initSearch() {
     html += matchedPosts.map(p => renderPostCard(p)).join('');
   }
 
-  root.innerHTML = html;
+  if (renderTarget) renderTarget.innerHTML = html;
 }
 
 // ===== 18. 敏感词过滤 =====
@@ -3366,4 +3400,12 @@ function injectMobileTopbar() {
   
   // 插入到 body 的最前面
   document.body.insertBefore(topbar, document.body.firstChild);
+}
+
+function doMobileSearch() {
+  const input = document.getElementById('mobile-search-input');
+  if (!input) return;
+  const q = input.value.trim();
+  if (!q) return;
+  location.href = 'search.html?q=' + encodeURIComponent(q);
 }
