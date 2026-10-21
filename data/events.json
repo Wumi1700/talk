@@ -4,7 +4,7 @@
     { "id": "elf-moon", "name": "月亮节", "route": "417号航线", "factions": ["精灵"], "date": "08-13", "days": 3, "desc": "精灵节日。月影林整夜开放，月光祝福所有旅人。" },
     { "id": "human-toast", "name": "祝酒节", "route": "417号航线", "factions": ["人类"], "date": "09-15", "days": 3, "desc": "人类节日。王都酒馆全部免费，举杯庆祝丰收。" },
     { "id": "dwarf-trade", "name": "交易日", "route": "417号航线", "factions": ["矮人"], "date": "03-20", "days": 3, "desc": "矮人节日。铁炉堡全城开放，最好的锻造品都在这一天展出。" },
-    { "id": "alien-ancestor", "name": "祖灵夜", "route": "417号航线", "factions": ["异人"], "date": "10-14", "days": 3, "desc": "异人节日。荒野篝火彻夜不熄，向先祖致敬。" },
+    { "id": "alien-ancestor", "name": "祖灵夜", "route": "417号航线", "factions": ["异人"], "date": "11-1", "days": 3, "desc": "异人节日。荒野篝火彻夜不熄，向先祖致敬。" },
     { "id": "christmas", "name": "圣诞节", "route": "240号航线", "factions": ["240", "246", "240-1"], "date": "12-25", "days": 3, "desc": "240号航线总节日。街道挂满彩灯，家人团聚。" },
     { "id": "legislation-day", "name": "立法日", "route": "240号航线", "factions": ["240"], "date": "07-19", "days": 3, "desc": "240号航线纪念日。纪念第一部《世界公约》颁布。" }
   ]
