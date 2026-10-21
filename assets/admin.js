@@ -5,6 +5,13 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let _unreadCache = { count: 0, t: 0 };
 
 const ADMIN_EMAILS = ['wuumii@outlook.com'];
+
+const ADMIN_LOCATIONS = {
+  '417号航线': ['绿林', '荒芜地', '红叶镇', '石地', '白地', '洞穴', '山地', '绿林边缘', '白地哨塔', '月光林地', '高地第一塔楼', '低地矿工营', '平地贸易站'],
+  '240号航线': ['72号老城', '圣彼得庄园', '白社区', '阿姆斯门特', '幸福泉', '下城警局', '混乱世界管理局', '中央法院', '黑皇后社区', '王城东区', '下城区', '自由港口'],
+  '无定所': ['流浪旅者', '无定所'],
+  '未知之地': ['未标记区域']
+};
 // ===== 从 app.js 复制的工具函数 =====
 function factionIcon(faction) {
   if (faction === '精灵') return '🦌';
@@ -491,7 +498,14 @@ function openCharacterEditor(jsonStr) {
         </div>
         <div>
           <label style="font-size:12px;color:var(--muted);">地点</label>
-          <input id="ce-location" type="text" value="${esc(p.location)}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+          <select id="ce-location" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#fff;">
+            <option value="">未选择</option>
+            ${Object.entries(ADMIN_LOCATIONS).map(([region, places]) => `
+              <optgroup label="${region}">
+                ${places.map(place => `<option value="${place}" ${p.location === place ? 'selected' : ''}>${place}</option>`).join('')}
+              </optgroup>
+            `).join('')}
+          </select>
         </div>
       </div>
 
@@ -1261,8 +1275,13 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
   }
 
   const isNew = !post;
+  // 自动生成一个绝对不会重复的帖子
+  const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const randomStr = Math.floor(Math.random() * 90000 + 10000);
+  const autoId = `${todayStr}-${randomStr}`;
+  
   const p = post || {
-    id: '',
+    id: autoId, // 这里自动填入生成好的 ID
     character: characterHandle || '',
     date: new Date().toISOString().slice(0, 10),
     tags: [],
@@ -1283,7 +1302,7 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
           <label style="font-size:12px;color:var(--muted);">帖子 ID</label>
-          <input id="pe-id" type="text" value="${esc(p.id)}" ${isNew ? '' : 'disabled'} placeholder="如 2026-10-15-001" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+          <input id="pe-id" type="text" value="${esc(p.id)}" disabled style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#f5f5f5;">
         </div>
         <div>
           <label style="font-size:12px;color:var(--muted);">角色 handle</label>
@@ -1298,7 +1317,14 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
         </div>
         <div>
           <label style="font-size:12px;color:var(--muted);">地点</label>
-          <input id="pe-location" type="text" value="${esc(p.location)}" placeholder="如 红叶镇" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+          <select id="pe-location" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#fff;">
+            <option value="">不填地点</option>
+            ${Object.entries(ADMIN_LOCATIONS).map(([region, places]) => `
+              <optgroup label="${region}">
+                ${places.map(place => `<option value="${place}" ${p.location === place ? 'selected' : ''}>${place}</option>`).join('')}
+              </optgroup>
+            `).join('')}
+          </select>
         </div>
       </div>
 
