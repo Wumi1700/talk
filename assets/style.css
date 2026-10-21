@@ -594,3 +594,16 @@ button.btn-primary {
     background: #E76F51; color: #fff; font-size: 10px; padding: 1px 5px; border-radius: 10px;
   }
 }
+
+/* 控制电脑端侧边栏 SVG 图标的大小和对齐 */
+.sidebar-left nav a .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+.sidebar-left nav a .icon svg {
+  width: 18px;
+  height: 18px;
+}
