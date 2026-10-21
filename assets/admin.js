@@ -596,28 +596,77 @@ function pickCharacterImage(type) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/jpeg,image/png,image/webp';
-  input.onchange = async () => {
+  input.onchange = () => {
     const file = input.files[0];
     if (!file) return;
-    try {
+
+    const url = URL.createObjectURL(file);
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
+    dialog.innerHTML = `
+      <div style="width:100%;max-width:600px;background:#fff;border-radius:12px;padding:16px;box-sizing:border-box;">
+        <h3 style="margin-bottom:12px;font-size:16px;">调整${type === 'avatar' ? '头像' : '背景图'}</h3>
+        <div style="max-height:60vh;overflow:hidden;background:#f0f0f0;border-radius:8px;">
+          <img id="admin-cropper-img" src="${url}" style="max-width:100%;display:block;">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+          <button class="btn" id="admin-crop-cancel">取消</button>
+          <button class="btn btn-primary" id="admin-crop-confirm">确认上传</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dialog);
+
+    const imgEl = dialog.querySelector('#admin-cropper-img');
+    let cropper = null;
+
+    imgEl.onload = () => {
+      cropper = new Cropper(imgEl, {
+        aspectRatio: type === 'avatar' ? 1 : 3, // 头像 1:1，背景 3:1
+        viewMode: 1,
+        autoCropArea: 0.85,
+        background: false,
+      });
+    };
+
+    dialog.querySelector('#admin-crop-cancel').onclick = () => {
+      if (cropper) cropper.destroy();
+      URL.revokeObjectURL(url);
+      dialog.remove();
+    };
+
+    dialog.querySelector('#admin-crop-confirm').onclick = () => {
+      if (!cropper) return showToast('图片加载中，请稍候');
       const maxW = type === 'avatar' ? 400 : 1200;
       const maxH = type === 'avatar' ? 400 : 400;
-      const blob = await compressImage(file, maxW, maxH, 0.8);
-      const path = `characters/${type}s/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
-      const { error } = await db.storage.from('post-images').upload(path, blob, { contentType: 'image/webp' });
-      if (error) throw error;
-      const { data: { publicUrl } } = db.storage.from('post-images').getPublicUrl(path);
-      if (type === 'avatar') {
-        _charAvatarTmp = publicUrl;
-        document.getElementById('ce-avatar-box').innerHTML = `<img src="${esc(publicUrl)}" style="width:100%;height:100%;object-fit:cover;">`;
-      } else {
-        _charBannerTmp = publicUrl;
-        document.getElementById('ce-banner-box').style.background = `url('${publicUrl}') center/cover`;
-      }
-      showToast('已上传');
-    } catch (e) {
-      showToast('上传失败：' + (e.message || '未知错误'));
-    }
+      
+      const canvas = cropper.getCroppedCanvas({ width: maxW, height: maxH, imageSmoothingQuality: 'high' });
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) return showToast('裁剪失败');
+        try {
+          const path = `characters/${type}s/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
+          const { error } = await db.storage.from('post-images').upload(path, blob, { contentType: 'image/webp' });
+          if (error) throw error;
+          
+          const { data: { publicUrl } } = db.storage.from('post-images').getPublicUrl(path);
+          
+          if (type === 'avatar') {
+            _charAvatarTmp = publicUrl;
+            document.getElementById('ce-avatar-box').innerHTML = `<img src="${esc(publicUrl)}" style="width:100%;height:100%;object-fit:cover;">`;
+          } else {
+            _charBannerTmp = publicUrl;
+            document.getElementById('ce-banner-box').style.background = `url('${publicUrl}') center/cover`;
+          }
+          showToast('已上传');
+          if (cropper) cropper.destroy();
+          URL.revokeObjectURL(url);
+          dialog.remove();
+        } catch (e) {
+          showToast('上传失败：' + (e.message || '未知错误'));
+        }
+      }, 'image/webp', 0.8);
+    };
   };
   input.click();
 }
