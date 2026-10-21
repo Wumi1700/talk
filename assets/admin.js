@@ -1,5 +1,5 @@
 // ===== 初始化 =====
-const SUPABASE_URL = 'https://talk-proxy.wuumii.workers.dev';
+const SUPABASE_URL = 'https://nsoyywbuqpfhhrezdcly.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zb3l5d2J1cXBmaGhyZXpkY2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MzMyODIsImV4cCI6MjEwNjQwOTI4Mn0.L17d0locmWHjQFykzv9bTjTyLZAk8LDyfSmpxbEnTgg';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let _unreadCache = { count: 0, t: 0 };
