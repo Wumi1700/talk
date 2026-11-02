@@ -1035,16 +1035,13 @@ async function loadComments(postId) {
     const liked = !!likedByMe[c.id];
     const canDelete = !c.as_character && currentUser && c.user_id === currentUser.id;
 
+    // 注意看这里：只渲染一次头像和名字！
     return `
       <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;' : ''}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           ${avatarHTMLSmall}
           <span>${factionIconHTML}${nameHTML}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          ${avatarHTMLSmall}
-          <span>${factionIconHTML}${nameHTML}</span>
-          ${c.is_pinned ? `<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;">置顶</span>` : ''}
+          ${c.is_pinned ? `<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px;">置顶</span>` : ''}
         </div>
         <div style="word-break:break-word;line-height:1.6;">
           ${replyPrefix}${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -1076,7 +1073,6 @@ async function loadComments(postId) {
     }
   });
 
-  // 递归收集所有后代（不管层级多深）
   function collectDescendants(commentId, result = []) {
     if (childrenMap[commentId]) {
       childrenMap[commentId].forEach(child => {
@@ -1088,16 +1084,14 @@ async function loadComments(postId) {
   }
 
   let html = '';
-  const roots = data.filter(c => !c.parent_id); // 只取顶级评论
+  const roots = data.filter(c => !c.parent_id);
   
   roots.forEach(root => {
-    // 渲染顶级
     html += renderOne(root, false);
-    // 获取该顶级下的所有子孙，按时间平铺
     const descendants = collectDescendants(root.id);
     descendants.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     descendants.forEach(desc => {
-      html += renderOne(desc, true); // true 表示是回复（左侧有缩进）
+      html += renderOne(desc, true);
     });
   });
   
