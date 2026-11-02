@@ -1071,6 +1071,7 @@ async function openCommentsPanel(postId) {
           <div style="font-size:13px;margin-bottom:8px;word-break:break-word;">${esc(c.content)}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn" style="font-size:12px;padding:2px 10px;" onclick="adminStartReply('${c.id}')">回复</button>
+            <button class="btn" style="font-size:12px;padding:2px 10px;" onclick="adminTogglePin('${c.id}', ${c.is_pinned})">${c.is_pinned ? '取消置顶' : '置顶'}</button>
             ${hidden
               ? `<button class="btn" style="font-size:12px;padding:2px 10px;" onclick="adminShowComment('${c.id}')">恢复显示</button>`
               : `<button class="btn" style="font-size:12px;padding:2px 10px;border-color:#dc3545;color:#dc3545;" onclick="adminHideCommentDirect('${c.id}')">隐藏</button>`}
@@ -1748,3 +1749,11 @@ window.addEventListener('DOMContentLoaded', async () => {
   await router();
 });
 window.addEventListener('hashchange', router);
+
+async function adminTogglePin(commentId, currentStatus) {
+  const newStatus = !currentStatus;
+  const { error } = await db.from('comments').update({ is_pinned: newStatus }).eq('id', commentId);
+  if (error) return showToast('操作失败：' + error.message);
+  showToast(newStatus ? '已置顶' : '已取消置顶');
+  if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
+}
