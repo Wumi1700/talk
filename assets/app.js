@@ -897,8 +897,14 @@ function renderPostCard(post, isDetail = false) {
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
         <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span></button>
-        <button class="action" onclick="location.href='post.html?id=${post.id}'">💬 <span>${commentCount}</span></button>
-        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">🔖 <span>${isBookmarked ? '已赞同' : '赞同'}</span></button>
+        <button class="action" onclick="location.href='post.html?id=${post.id}'">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+          <span>${commentCount}</span>
+        </button>
+        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+          <span>${isBookmarked ? '已赞同' : '赞同'}</span>
+        </button>
       </div>
     </article>
   `;
@@ -1949,8 +1955,11 @@ async function initPost() {
       </div>
       
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-        <div id="quota-msg-${post.id}" style="font-size:12px; color:var(--muted);">
-          <!-- 额度提示会由 JS 自动填入 -->
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="btn" style="padding:4px 10px; font-size:16px; font-weight:bold; border-radius:8px; color:var(--primary-dark);" onclick="showToast('正在努力绘制中ψ(｀∇´)ψ')">;)</button>
+          <div id="quota-msg-${post.id}" style="font-size:12px; color:var(--muted);">
+            <!-- 额度提示会由 JS 自动填入 -->
+          </div>
         </div>
         <button class="btn btn-primary" id="submit-btn-${post.id}" onclick="submitComment('${post.id}')" ${forumReadOnly ? 'disabled style="opacity:0.5;"' : ''}>发送</button>
       </div>
