@@ -957,7 +957,7 @@ async function loadComments(postId) {
   const list = document.getElementById(`comments-list-${postId}`);
   list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
   
-  const { data, error } = await db.from('comments').select('id, content, created_at, user_id, parent_id, as_character').eq('post_id', postId).eq('status', 'visible').order('created_at', { ascending: true });
+  const { data, error } = await db.from('comments').select('id, content, created_at, user_id, parent_id, as_character, is_pinned').eq('post_id', postId).eq('status', 'visible').order('is_pinned', { ascending: false }).order('created_at', { ascending: true });
   
   if (error) { list.innerHTML = '<div style="font-size:13px;color:var(--danger);">加载失败</div>'; return; }
   if (!data || data.length === 0) { list.innerHTML = '<div style="font-size:13px;color:var(--muted);">还没有评论</div>'; return; }
@@ -1034,6 +1034,11 @@ async function loadComments(postId) {
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           ${avatarHTMLSmall}
           <span>${factionIconHTML}${nameHTML}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          ${avatarHTMLSmall}
+          <span>${factionIconHTML}${nameHTML}</span>
+          ${c.is_pinned ? `<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;">置顶</span>` : ''}
         </div>
         <div style="word-break:break-word;line-height:1.6;">
           ${replyPrefix}${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
