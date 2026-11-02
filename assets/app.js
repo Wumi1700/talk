@@ -3,6 +3,30 @@ const SUPABASE_URL =  'https://nsoyywbuqpfhhrezdcly.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zb3l5d2J1cXBmaGhyZXpkY2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MzMyODIsImV4cCI6MjEwNjQwOTI4Mn0.L17d0locmWHjQFykzv9bTjTyLZAk8LDyfSmpxbEnTgg';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ===== 阵营/航线介绍文案 =====
+const FACTION_INTROS = {
+  '精灵': `<b>鹿角种下绿草，风将草种散播到各地。</b><br><br>
+    · <b>绿林精灵</b>：落入森林，善用弓箭狩猎。他们热情，心怀泥土，树木就是他们的家。<br>
+    · <b>白地精灵</b>：落入雪地，善用法术伪装。在冰原中躲避敌人，苍茫雪原铸就了他们纯真的性格。<br>
+    · <b>山间精灵</b>：落入山地，精于奔走追捕。行走于峭石间，石林的多变使他们善于算计，难以亲近。`,
+  '矮人': `<b>高筑之山的崩塌，让紧密相连的石头滚落于地。</b><br><br>
+    · <b>高地矮人</b>：最早停住脚步，遵循先祖志愿，精通武器铸造与造塔。如果不敬于高塔，将被驱逐。<br>
+    · <b>平地矮人</b>：四处停留，学会商贾之术。处事圆滑，机灵狡诈，唯一的准则是不欺骗高塔。<br>
+    · <b>低地矮人</b>：打穿地层停在矿洞。善于迷宫制造，记忆力超强，嗓门很大，为了方便运输会求助精灵建造铁轨。`,
+  '人类': `<b>在夹缝中生存与繁荣的种族。</b><br><br>
+    人类没有精灵与生俱来的自然亲和，也没有矮人坚如磐石的体魄。但人类拥有极强的适应力和求知欲，他们在城镇中建立学院，钻研魔法，用智慧与应变在这个世界立足。见习法师们，正在探索这个世界的更多可能。`,
+  '异人': `<b>荒野与部落的守望者。</b><br><br>
+    他们游离于文明边缘，生性狂野，信奉本能。在荒野深处，他们与自然、与未知的古老力量共生，被其他种族敬畏地称为“泥娃娃”。他们相信生存就是最高的法则。`,
+  '240': `<b>混乱的都市（240号航线）。</b><br><br>
+    这里分为上城和下城，上城的人尽情欢乐，下城的人无限作恶。<br>
+    这里没有法律可言，警察只是一个美观机构。你可以在这里做任何你想做的事，当然，也要注意保护好自己的生命。`,
+  '246': `<b>规则之城（246号航线）。</b><br><br>
+    这里没有圆，只有方。任何一件事情，都是由规则构成，任何一步，都走向一条怪谈。<br>
+    请遵循规则，或者用尽生命力去打破规则。`,
+  '240-1': `<b>正常又不正常的现实社会（240-1航线）。</b><br><br>
+    这里是普通的人类都市，表面看似一切如常，但在规则与秩序之下，似乎又隐藏着不为人知的怪异。`
+};
+
 // ===== 2. 全局变量 =====
 let forumReadOnly = false;
 let currentUser = null;
@@ -2757,10 +2781,12 @@ async function initForum() {
     `;
   }
 
-  // 拼装顶部板块提示
   const topBanner = eventBanner + `
-    <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
-      <h3>${factionIcon(viewingFaction)} ${viewingFaction} · 论坛 ${isOwn ? '' : '<span style="font-size:12px;color:var(--text-muted);font-weight:400;">（仅浏览）</span>'}</h3>
+    <div class="card" style="background:var(--primary-light);border-color:var(--primary);cursor:pointer;" onclick="showFactionIntro('${viewingFaction}')">
+      <h3 style="display:flex;justify-content:space-between;align-items:center;margin:0;">
+        <span>${factionIcon(viewingFaction)} ${viewingFaction} · 论坛 ${isOwn ? '' : '<span style="font-size:12px;color:var(--text-muted);font-weight:400;">（仅浏览）</span>'}</span>
+        <span style="font-size:12px;color:var(--primary-dark);font-weight:normal;">查看阵营介绍 ➔</span>
+      </h3>
       <p style="margin-top:8px;font-size:13px;color:var(--text-muted);">
         ${isOwn ? '这里是你的阵营论坛。' : '你正在浏览其他阵营的论坛，只能查看，不能互动。'}
       </p>
@@ -3418,4 +3444,38 @@ function doMobileSearch() {
   const q = input.value.trim();
   if (!q) return;
   location.href = 'search.html?q=' + encodeURIComponent(q);
+}
+
+// ===== 阵营介绍弹窗 =====
+function showFactionIntro(faction) {
+  const text = FACTION_INTROS[faction] || '暂无介绍。';
+  
+  if (document.getElementById('faction-intro-modal')) {
+    document.getElementById('faction-intro-modal').remove();
+  }
+
+  const modal = document.createElement('div');
+  modal.id = 'faction-intro-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;backdrop-filter:blur(4px);';
+  
+  modal.innerHTML = `
+    <div style="background:#fff;width:100%;max-width:500px;border-radius:16px;padding:24px;box-sizing:border-box;box-shadow:0 10px 30px rgba(0,0,0,0.2);max-height:85vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px;">
+        <h2 style="margin:0;font-size:20px;color:var(--text);display:flex;align-items:center;gap:8px;">
+          ${factionIcon(faction)} ${faction} 介绍
+        </h2>
+        <button onclick="document.getElementById('faction-intro-modal').remove()" style="background:none;border:none;font-size:24px;color:var(--muted);cursor:pointer;line-height:1;">&times;</button>
+      </div>
+      <div style="font-size:14px;line-height:1.8;color:var(--text);">
+        ${text}
+      </div>
+      <button class="btn btn-primary" onclick="document.getElementById('faction-intro-modal').remove()" style="width:100%;margin-top:24px;border-radius:999px;">我知道了</button>
+    </div>
+  `;
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+  
+  document.body.appendChild(modal);
 }
