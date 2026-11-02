@@ -607,3 +607,38 @@ button.btn-primary {
   width: 18px;
   height: 18px;
 }
+
+/* ===== 长帖折叠样式 ===== */
+.post-body-wrapper {
+  position: relative;
+}
+.post-body-wrapper.collapsed {
+  max-height: 160px; /* 默认显示大概 4-5 行 */
+  overflow: hidden;
+}
+/* 底部的白色渐变遮罩 */
+.post-body-wrapper.collapsed::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background: linear-gradient(to bottom, transparent, var(--card) 80%);
+  pointer-events: none;
+}
+.expand-btn {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--primary-dark);
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+.expand-btn:hover {
+  text-decoration: underline;
+}
