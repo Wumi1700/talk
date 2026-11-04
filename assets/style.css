@@ -669,7 +669,6 @@ button.btn-primary {
   display: flex;
   gap: 12px;
 }
-
 .skeleton-avatar {
   width: 44px;
   height: 44px;
@@ -678,13 +677,11 @@ button.btn-primary {
   flex-shrink: 0;
   animation: pulse 1.5s infinite ease-in-out;
 }
-
 .skeleton-content {
   flex: 1;
   min-width: 0;
   padding-top: 4px;
 }
-
 .skeleton-line {
   height: 14px;
   background-color: var(--border);
@@ -692,13 +689,11 @@ button.btn-primary {
   margin-bottom: 10px;
   animation: pulse 1.5s infinite ease-in-out;
 }
-
 .skeleton-line.title { width: 30%; margin-bottom: 14px; }
 .skeleton-line.text { width: 90%; }
 .skeleton-line.text.short { width: 60%; }
 .skeleton-line.actions { width: 40%; margin-top: 16px; margin-bottom: 0; }
 
-/* 呼吸闪烁动画 */
 @keyframes pulse {
   0% { opacity: 1; }
   50% { opacity: 0.5; }
