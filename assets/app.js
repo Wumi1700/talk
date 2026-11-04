@@ -1621,6 +1621,7 @@ function renderAchievements(s) {
 async function initProfile() {
   await checkUser();
   await loadData();
+  await loadForumData();
   await loadPostStats();
   const root = $('#user-profile');
   if (!currentUser || !currentProfile) {
@@ -1755,21 +1756,29 @@ async function initProfile() {
     } else if (tab === 'likes') {
       const { data: likesData } = await db.from('likes').select('post_id').eq('user_id', currentUser.id);
       const ids = (likesData || []).map(l => l.post_id);
-      const likedPosts = POSTS.filter(p => ids.includes(p.id));
+      // 👈 新增 allPosts 合并
+      const allPosts = [...POSTS, ...FORUM_POSTS];
+      const likedPosts = allPosts.filter(p => ids.includes(p.id));
       if (!likedPosts.length) return container.innerHTML = '<div class="empty">你还没有点赞过帖子</div>';
       container.innerHTML = likedPosts.map(p => renderPostCard(p)).join('');
     } else if (tab === 'bookmarks') {
       const { data: bkData } = await db.from('bookmarks').select('post_id').eq('user_id', currentUser.id);
       const ids = (bkData || []).map(b => b.post_id);
-      const bkPosts = POSTS.filter(p => ids.includes(p.id));
+      // 👈 新增 allPosts 合并
+      const allPosts = [...POSTS, ...FORUM_POSTS];
+      const bkPosts = allPosts.filter(p => ids.includes(p.id));
       if (!bkPosts.length) return container.innerHTML = '<div class="empty">你还没有收藏过帖子</div>';
       container.innerHTML = bkPosts.map(p => renderPostCard(p)).join('');
     } else if (tab === 'comments') {
       const { data: cmData } = await db.from('comments').select('content, post_id, created_at').eq('user_id', currentUser.id).order('created_at', { ascending: false });
       if (!cmData || !cmData.length) return container.innerHTML = '<div class="empty">你还没有发过评论</div>';
+      // 👈 新增 allPosts 合并
+      const allPosts = [...POSTS, ...FORUM_POSTS];
       container.innerHTML = cmData.map(c => {
-        const post = POSTS.find(p => p.id === c.post_id);
-        const postTitle = post ? post.content.slice(0, 30) + '...' : '（帖子已删除）';
+        const post = allPosts.find(p => p.id === c.post_id);
+        // 智能判断是主页帖还是论坛帖
+        const postType = post && post.postType === 'forum' ? '【论坛帖】' : '【主页帖】';
+        const postTitle = post ? postType + post.content.slice(0, 30) + '...' : '（帖子已删除）';
         return `<div class="card" style="margin-bottom:10px;">
           <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">评论了帖子：${postTitle}</div>
           <div style="font-size:14px;background:var(--bg);padding:8px;border-radius:8px;">${c.content}</div>
