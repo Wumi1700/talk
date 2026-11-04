@@ -789,3 +789,22 @@ button.btn-primary {
   font-size: 24px; cursor: pointer; z-index: 10;
   display: flex; align-items: center; justify-content: center;
 }
+
+/* ===== 推荐角色内部滑动 ===== */
+.recommend-scroll-box {
+  max-height: 320px; /* 最高显示大概4-5个角色，超出的就在里面滑 */
+  overflow-y: auto;  /* 允许内部上下滑动 */
+  padding-right: 6px; /* 给滚动条留一点空隙，不挤压头像 */
+}
+
+/* 把滚动条做得极细、极简，融入 UI */
+.recommend-scroll-box::-webkit-scrollbar {
+  width: 4px;
+}
+.recommend-scroll-box::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.recommend-scroll-box::-webkit-scrollbar-track {
+  background: transparent;
+}
