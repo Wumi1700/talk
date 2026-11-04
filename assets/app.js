@@ -1801,34 +1801,28 @@ async function initProfile() {
 
 // ===== 11. 页面入口 =====
 async function initHome() {
-  alert("代码运行到这里了！");
   forumReadOnly = false;
 
+  // 👈 暴力测试版骨架屏
   const feed = $('#feed');
   if (feed) {
-    let skeletonHTML = '';
-    for (let i = 0; i < 3; i++) {
-      skeletonHTML += `
-        <div class="skeleton-post">
-          <div class="skeleton-avatar"></div>
-          <div class="skeleton-content">
-            <div class="skeleton-line title"></div>
-            <div class="skeleton-line text"></div>
-            <div class="skeleton-line text short"></div>
-            <div class="skeleton-line actions"></div>
-          </div>
-        </div>
-      `;
-    }
-    feed.innerHTML = skeletonHTML;
+    feed.innerHTML = `
+      <div style="background: red; color: white; padding: 20px; font-size: 20px; text-align: center;">
+        这是骨架屏占位1
+      </div>
+      <div style="background: blue; color: white; padding: 20px; font-size: 20px; text-align: center; margin-top: 10px;">
+        这是骨架屏占位2
+      </div>
+    `;
   }
 
-  // 👈 强行等待 3 秒，让你看个够！
+  // 强行等 3 秒
   await new Promise(r => setTimeout(r, 3000));
 
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
+  // ... 后面保持你原来的代码 ...
   await loadPostStats();
   await loadAds();
   await loadHotsearch();
