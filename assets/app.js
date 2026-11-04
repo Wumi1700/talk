@@ -1801,6 +1801,7 @@ async function initProfile() {
 
 // ===== 11. 页面入口 =====
 async function initHome() {
+  alert("代码运行到这里了！");
   forumReadOnly = false;
 
   const feed = $('#feed');
