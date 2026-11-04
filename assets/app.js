@@ -871,22 +871,76 @@ function renderPostImages(images) {
   if (!images || !images.length) return '';
   const count = Math.min(images.length, 4);
   const cls = 'post-images post-images-' + count;
-  return `<div class="${cls}">${images.slice(0, 4).map(img =>
-    `<img src="${img}" alt="" loading="lazy" onclick="event.stopPropagation();openImageViewer('${img}')">`
+  
+  // 将图片数组转换为安全的 JSON 字符串，方便传给点击事件
+  const imgListStr = JSON.stringify(images).replace(/"/g, '&quot;');
+
+  return `<div class="${cls}">${images.slice(0, 4).map((img, i) =>
+    `<img src="${img}" alt="" loading="lazy" onclick="event.stopPropagation(); openImageViewer(${imgListStr}, ${i})">`
   ).join('')}</div>`;
 }
 
-function openImageViewer(src) {
+function openImageViewer(images, startIndex = 0) {
+  if (!images || !images.length) return;
+  
   const existing = document.getElementById('image-viewer');
   if (existing) existing.remove();
+
   const viewer = document.createElement('div');
   viewer.id = 'image-viewer';
-  viewer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:20px;';
-  viewer.innerHTML = `<img src="${src}" style="max-width:90%;max-height:90%;border-radius:8px;">`;
-  viewer.addEventListener('click', () => viewer.remove());
-  const onEsc = (e) => { if (e.key === 'Escape') { viewer.remove(); document.removeEventListener('keydown', onEsc); } };
-  document.addEventListener('keydown', onEsc);
+  viewer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:99999;display:flex;flex-direction:column;';
+  
+  // 生成所有的图片元素，使用 scroll-snap 实现滑动吸附
+  const imagesHTML = images.map((src, i) => `
+    <div class="viewer-slide">
+      <img src="${src}" alt="">
+    </div>
+  `).join('');
+
+  viewer.innerHTML = `
+    <!-- 顶部关闭按钮 -->
+    <div style="position:absolute; top:20px; right:20px; z-index:10;">
+      <button onclick="document.getElementById('image-viewer').remove()" style="background:rgba(255,255,255,0.2); border:none; color:#fff; font-size:24px; width:40px; height:40px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">&times;</button>
+    </div>
+    
+    <!-- 图片滑动容器 -->
+    <div id="viewer-scroll-container" style="flex:1; display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -ms-overflow-style:none;">
+      ${imagesHTML}
+    </div>
+    
+    <!-- 底部页码指示器 -->
+    <div id="viewer-indicator" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); color:#fff; background:rgba(0,0,0,0.5); padding:4px 12px; border-radius:20px; font-size:14px; font-weight:600; z-index:10;">
+      ${startIndex + 1} / ${images.length}
+    </div>
+  `;
+
+  // 隐藏横向滚动条 (针对 webkit 浏览器)
+  const style = document.createElement('style');
+  style.innerHTML = `#viewer-scroll-container::-webkit-scrollbar { display: none; }`;
+  viewer.appendChild(style);
+
   document.body.appendChild(viewer);
+
+  // 滚动到当前点击的那张图
+  const container = document.getElementById('viewer-scroll-container');
+  const width = viewer.clientWidth;
+  container.scrollLeft = startIndex * width;
+
+  // 监听滑动事件，更新页码
+  container.addEventListener('scroll', () => {
+    const currentIndex = Math.round(container.scrollLeft / width);
+    const indicator = document.getElementById('viewer-indicator');
+    if (indicator) {
+      indicator.textContent = `${currentIndex + 1} / ${images.length}`;
+    }
+  });
+
+  // 点击背景空白处关闭（如果点击的是 img 本身则不关闭）
+  container.addEventListener('click', (e) => {
+    if (e.target === container || e.target.classList.contains('viewer-slide')) {
+      viewer.remove();
+    }
+  });
 }
 
 function renderPostCard(post, isDetail = false) {
