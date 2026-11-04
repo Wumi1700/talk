@@ -1803,26 +1803,30 @@ async function initProfile() {
 async function initHome() {
   forumReadOnly = false;
 
-  // 👈 暴力测试版骨架屏
+  // 1. 先查一下页面上有没有内容，如果没有（或者写着加载中），立刻塞入骨架屏
   const feed = $('#feed');
-  if (feed) {
-    feed.innerHTML = `
-      <div style="background: red; color: white; padding: 20px; font-size: 20px; text-align: center;">
-        这是骨架屏占位1
-      </div>
-      <div style="background: blue; color: white; padding: 20px; font-size: 20px; text-align: center; margin-top: 10px;">
-        这是骨架屏占位2
-      </div>
-    `;
+  if (feed && (feed.innerHTML === '' || feed.innerHTML.includes('加载中'))) {
+    let skeletonHTML = '';
+    for (let i = 0; i < 3; i++) {
+      skeletonHTML += `
+        <div class="skeleton-post">
+          <div class="skeleton-avatar"></div>
+          <div class="skeleton-content">
+            <div class="skeleton-line title"></div>
+            <div class="skeleton-line text"></div>
+            <div class="skeleton-line text short"></div>
+            <div class="skeleton-line actions"></div>
+          </div>
+        </div>
+      `;
+    }
+    feed.innerHTML = skeletonHTML;
   }
 
-  // 强行等 3 秒
-  await new Promise(r => setTimeout(r, 3000));
-
+  // 2. 正常去加载数据（把那些故意等待的代码全删了！）
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
-  // ... 后面保持你原来的代码 ...
   await loadPostStats();
   await loadAds();
   await loadHotsearch();
@@ -1860,6 +1864,7 @@ async function initHome() {
     });
   }
 
+  // 3. 渲染真实帖子（自动覆盖掉刚才的骨架屏）
   if (!displayPosts.length) {
     feed.innerHTML = mobileHotsearchHTML + '<div class="empty">还没有动态</div>';
   } else {
