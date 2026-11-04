@@ -1342,6 +1342,100 @@ async function toggleCommentLike(commentId, btn) {
   }
 }
 
+// 全局变量，存放当前帖子能 @ 的人
+let currentPostMentions = [];
+
+async function prepareMentionData(postId) {
+  currentPostMentions = [];
+  
+  // 1. 查出这篇帖子的所有评论
+  const { data: comments } = await db.from('comments').select('user_id, as_character').eq('post_id', postId).eq('status', 'visible');
+  if (!comments) return;
+
+  // 2. 提取去重后的用户 ID 和 角色 ID
+  const userIds = [...new Set(comments.filter(c => !c.as_character && c.user_id).map(c => c.user_id))];
+  const charHandles = [...new Set(comments.filter(c => c.as_character).map(c => c.as_character))];
+
+  // 3. 把用户加进去
+  if (userIds.length) {
+    const { data: profiles } = await db.from('profiles').select('id, username, avatar_url, faction').in('id', userIds);
+    (profiles || []).forEach(p => {
+      if (currentUser && p.id === currentUser.id) return; // 排除自己
+      currentPostMentions.push({
+        name: p.username || '匿名旅者',
+        avatar: p.avatar_url,
+        faction: p.faction,
+        isChar: false
+      });
+    });
+  }
+
+  // 4. 把角色加进去
+  charHandles.forEach(handle => {
+    const ch = CHARACTERS[handle];
+    if (ch) {
+      currentPostMentions.push({
+        name: ch.name,
+        avatar: ch.avatar,
+        faction: ch.faction,
+        isChar: true
+      });
+    }
+  });
+}
+
+// 显示 @ 弹窗
+function showMentionDropdown(inputEl, postId) {
+  let dropdown = document.getElementById(`mention-dropdown-${postId}`);
+  
+  if (!dropdown) {
+    dropdown = document.createElement('div');
+    dropdown.id = `mention-dropdown-${postId}`;
+    dropdown.className = 'mention-dropdown';
+    document.body.appendChild(dropdown); // 挂在 body 上防止被 input 遮挡
+  }
+
+  if (currentPostMentions.length === 0) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  // 渲染列表
+  dropdown.innerHTML = currentPostMentions.map((m, index) => `
+    <div class="mention-item" onclick="insertMention('${postId}', '${m.name}')">
+      <div class="avatar">${m.avatar ? `<img src="${m.avatar}">` : m.name.charAt(0)}</div>
+      <div>${m.faction ? factionIcon(m.faction) + ' ' : ''}${m.name}</div>
+    </div>
+  `).join('');
+
+  // 计算位置（放在输入框上方）
+  const rect = inputEl.getBoundingClientRect();
+  dropdown.style.left = rect.left + 'px';
+  dropdown.style.top = (rect.top - 210) + 'px'; // 往上偏移
+  dropdown.style.display = 'block';
+}
+
+// 插入 @ 名字
+function insertMention(postId, name) {
+  const input = document.getElementById(`comment-input-${postId}`);
+  if (!input) return;
+  
+  const startPos = input.selectionStart;
+  const textBefore = input.value.substring(0, startPos);
+  const textAfter = input.value.substring(startPos);
+  
+  // 把当前光标所在的 @ 替换成选中的名字 + 空格
+  const lastAtPos = textBefore.lastIndexOf('@');
+  if (lastAtPos !== -1) {
+    input.value = textBefore.substring(0, lastAtPos) + '@' + name + ' ' + textAfter;
+  }
+  
+  input.focus();
+  // 隐藏弹窗
+  const dropdown = document.getElementById(`mention-dropdown-${postId}`);
+  if (dropdown) dropdown.style.display = 'none';
+}
+
 async function submitComment(postId) {
   if (!currentUser) return showToast('请先登录');
   if (forumReadOnly) return showToast('你不是这个阵营的成员');
@@ -2139,6 +2233,37 @@ async function initPost() {
       </div>
     </div>
   `;
+
+  // 👈 准备 @ 的数据
+  await prepareMentionData(post.id);
+  
+  // 👈 监听输入框，触发 @ 弹窗
+  const commentInput = document.getElementById(`comment-input-${post.id}`);
+  if (commentInput) {
+    commentInput.addEventListener('input', (e) => {
+      const val = e.target.value;
+      const cursorPos = e.target.selectionStart;
+      const textBefore = val.substring(0, cursorPos);
+      
+      // 如果刚刚输入的是 @，或者在 @ 后面继续打字
+      const lastAtPos = textBefore.lastIndexOf('@');
+      if (lastAtPos !== -1 && lastAtPos >= textBefore.length - 15 && !textBefore.includes(' ')) {
+        showMentionDropdown(commentInput, post.id);
+      } else {
+        const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
+        if (dropdown) dropdown.style.display = 'none';
+      }
+    });
+
+    // 失去焦点时隐藏弹窗
+    commentInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
+        if (dropdown) dropdown.style.display = 'none';
+      }, 200);
+    });
+  }
+
   await loadComments(post.id);
   await checkCommentQuota(post.id);
 }
