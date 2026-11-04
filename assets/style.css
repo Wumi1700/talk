@@ -811,7 +811,7 @@ button.btn-primary {
 
 /* ===== @ 提及选人面板 ===== */
 .mention-dropdown {
-  position: absolute;
+  position: absolute; /* 改为 absolute */
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
