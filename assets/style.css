@@ -661,3 +661,46 @@ button.btn-primary {
   border-radius: 4px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
+
+/* ===== 骨架屏加载动画 ===== */
+.skeleton-post {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+}
+
+.skeleton-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: var(--border);
+  flex-shrink: 0;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.skeleton-content {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.skeleton-line {
+  height: 14px;
+  background-color: var(--border);
+  border-radius: 4px;
+  margin-bottom: 10px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.skeleton-line.title { width: 30%; margin-bottom: 14px; }
+.skeleton-line.text { width: 90%; }
+.skeleton-line.text.short { width: 60%; }
+.skeleton-line.actions { width: 40%; margin-top: 16px; margin-bottom: 0; }
+
+/* 呼吸闪烁动画 */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
