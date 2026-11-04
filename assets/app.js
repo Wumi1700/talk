@@ -1392,26 +1392,41 @@ function showMentionDropdown(inputEl, postId) {
     dropdown = document.createElement('div');
     dropdown.id = `mention-dropdown-${postId}`;
     dropdown.className = 'mention-dropdown';
-    document.body.appendChild(dropdown); // 挂在 body 上防止被 input 遮挡
+    document.body.appendChild(dropdown); 
   }
 
   if (currentPostMentions.length === 0) {
-    dropdown.style.display = 'none';
-    return;
+    dropdown.innerHTML = `<div style="padding:12px; font-size:12px; color:#888; text-align:center;">暂无其他可 @ 的用户</div>`;
+  } else {
+    dropdown.innerHTML = currentPostMentions.map((m) => `
+      <div class="mention-item" onclick="insertMention('${postId}', '${m.name}')">
+        <div class="avatar">${m.avatar ? `<img src="${m.avatar}">` : m.name.charAt(0)}</div>
+        <div>${m.faction ? factionIcon(m.faction) + ' ' : ''}${m.name}</div>
+      </div>
+    `).join('');
   }
 
-  // 渲染列表
-  dropdown.innerHTML = currentPostMentions.map((m, index) => `
-    <div class="mention-item" onclick="insertMention('${postId}', '${m.name}')">
-      <div class="avatar">${m.avatar ? `<img src="${m.avatar}">` : m.name.charAt(0)}</div>
-      <div>${m.faction ? factionIcon(m.faction) + ' ' : ''}${m.name}</div>
-    </div>
-  `).join('');
-
-  // 计算位置（放在输入框上方）
   const rect = inputEl.getBoundingClientRect();
-  dropdown.style.left = rect.left + 'px';
-  dropdown.style.top = (rect.top - 210) + 'px'; // 往上偏移
+  const dropdownHeight = 200; // 假设弹窗最大高度
+  
+  // 默认弹窗位置：在输入框上方
+  let topPosition = rect.top - dropdownHeight - 10;
+  
+  // 如果上方空间不足（比如输入框太靠上），就弹在输入框下方
+  if (topPosition < 10) {
+    topPosition = rect.bottom + 10;
+  }
+
+  // 左右位置：尽量和输入框左对齐，且不能超出屏幕右边
+  let leftPosition = rect.left;
+  if (leftPosition + 220 > window.innerWidth) {
+    leftPosition = window.innerWidth - 230;
+  }
+
+  dropdown.style.position = 'fixed';
+  dropdown.style.left = leftPosition + 'px';
+  dropdown.style.top = topPosition + 'px';
+  dropdown.style.zIndex = '99999';
   dropdown.style.display = 'block';
 }
 
