@@ -1386,13 +1386,18 @@ async function prepareMentionData(postId) {
 
 // 显示 @ 弹窗
 function showMentionDropdown(inputEl, postId) {
+  // 找到输入框的父级容器
+  const wrapper = document.getElementById(`comment-input-wrapper-${postId}`);
+  if (!wrapper) return;
+
   let dropdown = document.getElementById(`mention-dropdown-${postId}`);
   
   if (!dropdown) {
     dropdown = document.createElement('div');
     dropdown.id = `mention-dropdown-${postId}`;
     dropdown.className = 'mention-dropdown';
-    document.body.appendChild(dropdown); 
+    // 👈 核心：把弹窗塞进输入框的父容器里！
+    wrapper.appendChild(dropdown); 
   }
 
   if (currentPostMentions.length === 0) {
@@ -1406,27 +1411,12 @@ function showMentionDropdown(inputEl, postId) {
     `).join('');
   }
 
-  const rect = inputEl.getBoundingClientRect();
-  const dropdownHeight = 200; // 假设弹窗最大高度
-  
-  // 默认弹窗位置：在输入框上方
-  let topPosition = rect.top - dropdownHeight - 10;
-  
-  // 如果上方空间不足（比如输入框太靠上），就弹在输入框下方
-  if (topPosition < 10) {
-    topPosition = rect.bottom + 10;
-  }
-
-  // 左右位置：尽量和输入框左对齐，且不能超出屏幕右边
-  let leftPosition = rect.left;
-  if (leftPosition + 220 > window.innerWidth) {
-    leftPosition = window.innerWidth - 230;
-  }
-
-  dropdown.style.position = 'fixed';
-  dropdown.style.left = leftPosition + 'px';
-  dropdown.style.top = topPosition + 'px';
-  dropdown.style.zIndex = '99999';
+  // 👈 核心：绝对定位，贴在上方
+  dropdown.style.position = 'absolute';
+  dropdown.style.left = '0';
+  dropdown.style.bottom = '100%'; 
+  dropdown.style.marginBottom = '8px'; 
+  dropdown.style.zIndex = '9999';
   dropdown.style.display = 'block';
 }
 
@@ -2232,7 +2222,8 @@ async function initPost() {
       <h3>评论</h3>
       <div id="comments-list-${post.id}" style="margin-top:10px;"></div>
       
-      <div style="position:relative; margin-top:12px;">
+      <!-- 这里是关键的相对定位包裹框 -->
+      <div style="position:relative; margin-top:12px;" id="comment-input-wrapper-${post.id}">
         <textarea id="comment-input-${post.id}" maxlength="500" rows="3" placeholder="${forumReadOnly ? '你不是这个阵营的成员，无法评论。' : '友善是交流的起点，发一条友善的评论吧~'}" ${forumReadOnly ? 'disabled' : ''} oninput="updateCharCount('${post.id}')" style="width:100%; padding:12px; padding-bottom:24px; border:1px solid var(--border); border-radius:8px; font-family:inherit; resize:vertical; font-size:14px; outline:none; ${forumReadOnly ? 'opacity:0.5; background:#f5f5f5;' : ''}"></textarea>
         <span id="char-count-${post.id}" style="position:absolute; right:12px; bottom:10px; font-size:12px; color:var(--muted);">0 / 500</span>
       </div>
@@ -2249,20 +2240,12 @@ async function initPost() {
     </div>
   `;
 
-  // 👈 准备 @ 的数据
   await prepareMentionData(post.id);
   
-  // 👈 监听输入框，触发 @ 弹窗
   const commentInput = document.getElementById(`comment-input-${post.id}`);
   if (commentInput) {
     commentInput.addEventListener('input', (e) => {
-      const val = e.target.value;
-      const cursorPos = e.target.selectionStart;
-      const textBefore = val.substring(0, cursorPos);
-      
-      // 如果刚刚输入的是 @，或者在 @ 后面继续打字
-      const lastAtPos = textBefore.lastIndexOf('@');
-      if (lastAtPos !== -1 && lastAtPos >= textBefore.length - 15 && !textBefore.includes(' ')) {
+      if (e.target.value.includes('@')) {
         showMentionDropdown(commentInput, post.id);
       } else {
         const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
@@ -2270,7 +2253,6 @@ async function initPost() {
       }
     });
 
-    // 失去焦点时隐藏弹窗
     commentInput.addEventListener('blur', () => {
       setTimeout(() => {
         const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
