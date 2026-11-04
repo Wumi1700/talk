@@ -872,7 +872,6 @@ function renderPostImages(images) {
   const count = Math.min(images.length, 4);
   const cls = 'post-images post-images-' + count;
   
-  // 将图片数组转换为安全的 JSON 字符串，方便传给点击事件
   const imgListStr = JSON.stringify(images).replace(/"/g, '&quot;');
 
   return `<div class="${cls}">${images.slice(0, 4).map((img, i) =>
@@ -883,64 +882,80 @@ function renderPostImages(images) {
 function openImageViewer(images, startIndex = 0) {
   if (!images || !images.length) return;
   
-  const existing = document.getElementById('image-viewer');
-  if (existing) existing.remove();
+  if (document.getElementById('image-viewer')) {
+    document.getElementById('image-viewer').remove();
+  }
 
   const viewer = document.createElement('div');
   viewer.id = 'image-viewer';
-  viewer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:99999;display:flex;flex-direction:column;';
   
-  // 生成所有的图片元素，使用 scroll-snap 实现滑动吸附
-  const imagesHTML = images.map((src, i) => `
+  const imagesHTML = images.map((src) => `
     <div class="viewer-slide">
       <img src="${src}" alt="">
     </div>
   `).join('');
 
+  // 只在有左右图片时，才显示箭头
+  const showPrev = images.length > 1 && startIndex > 0;
+  const showNext = images.length > 1 && startIndex < images.length - 1;
+
   viewer.innerHTML = `
-    <!-- 顶部关闭按钮 -->
-    <div style="position:absolute; top:20px; right:20px; z-index:10;">
-      <button onclick="document.getElementById('image-viewer').remove()" style="background:rgba(255,255,255,0.2); border:none; color:#fff; font-size:24px; width:40px; height:40px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">&times;</button>
-    </div>
+    <button class="viewer-close" onclick="document.getElementById('image-viewer').remove()">&times;</button>
     
-    <!-- 图片滑动容器 -->
-    <div id="viewer-scroll-container" style="flex:1; display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -ms-overflow-style:none;">
+    ${images.length > 1 ? `<button class="viewer-btn prev" onclick="viewerGoTo(-1)">&#10094;</button>` : ''}
+    
+    <div class="viewer-scroll-container" id="viewer-scroll-container">
       ${imagesHTML}
     </div>
     
-    <!-- 底部页码指示器 -->
-    <div id="viewer-indicator" style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%); color:#fff; background:rgba(0,0,0,0.5); padding:4px 12px; border-radius:20px; font-size:14px; font-weight:600; z-index:10;">
+    ${images.length > 1 ? `<button class="viewer-btn next" onclick="viewerGoTo(1)">&#10095;</button>` : ''}
+    
+    <div class="viewer-indicator" id="viewer-indicator">
       ${startIndex + 1} / ${images.length}
     </div>
   `;
 
-  // 隐藏横向滚动条 (针对 webkit 浏览器)
-  const style = document.createElement('style');
-  style.innerHTML = `#viewer-scroll-container::-webkit-scrollbar { display: none; }`;
-  viewer.appendChild(style);
-
   document.body.appendChild(viewer);
 
-  // 滚动到当前点击的那张图
   const container = document.getElementById('viewer-scroll-container');
   const width = viewer.clientWidth;
+  
+  // 初始滚动到当前点击的图片
   container.scrollLeft = startIndex * width;
 
-  // 监听滑动事件，更新页码
+  // 监听滚动更新页码
   container.addEventListener('scroll', () => {
     const currentIndex = Math.round(container.scrollLeft / width);
-    const indicator = document.getElementById('viewer-indicator');
-    if (indicator) {
-      indicator.textContent = `${currentIndex + 1} / ${images.length}`;
-    }
+    document.getElementById('viewer-indicator').textContent = `${currentIndex + 1} / ${images.length}`;
+    
+    // 动态控制箭头的显示隐藏
+    const prevBtn = viewer.querySelector('.prev');
+    const nextBtn = viewer.querySelector('.next');
+    if (prevBtn) prevBtn.style.display = currentIndex > 0 ? 'flex' : 'none';
+    if (nextBtn) nextBtn.style.display = currentIndex < images.length - 1 ? 'flex' : 'none';
+    
+    // 更新当前索引，供按钮调用
+    viewer.dataset.currentIndex = currentIndex;
   });
 
-  // 点击背景空白处关闭（如果点击的是 img 本身则不关闭）
-  container.addEventListener('click', (e) => {
-    if (e.target === container || e.target.classList.contains('viewer-slide')) {
-      viewer.remove();
+  // 初始化状态
+  viewer.dataset.currentIndex = startIndex;
+  const prevBtn = viewer.querySelector('.prev');
+  const nextBtn = viewer.querySelector('.next');
+  if (prevBtn && startIndex === 0) prevBtn.style.display = 'none';
+  if (nextBtn && startIndex === images.length - 1) nextBtn.style.display = 'none';
+
+  // 全局点击函数供按钮调用
+  window.viewerGoTo = function(direction) {
+    const current = parseInt(viewer.dataset.currentIndex);
+    const target = current + direction;
+    if (target >= 0 && target < images.length) {
+      container.scrollTo({
+        left: target * width,
+        behavior: 'smooth'
+      });
     }
-  });
+  };
 }
 
 function renderPostCard(post, isDetail = false) {
