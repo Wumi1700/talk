@@ -1802,8 +1802,6 @@ async function initProfile() {
 // ===== 11. 页面入口 =====
 async function initHome() {
   forumReadOnly = false;
-
-  // 👈 【新增 1：先在页面里塞入骨架屏】
   const feed = $('#feed');
   if (feed) {
     let skeletonHTML = '';
@@ -1822,7 +1820,8 @@ async function initHome() {
     }
     feed.innerHTML = skeletonHTML;
   }
-
+    // 强制等待 1.5 秒，为了肉眼看清骨架屏（测试用）
+  await new Promise(r => setTimeout(r, 1500));
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
