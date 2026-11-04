@@ -1802,6 +1802,27 @@ async function initProfile() {
 // ===== 11. 页面入口 =====
 async function initHome() {
   forumReadOnly = false;
+
+  // 👈 【新增 1：先在页面里塞入骨架屏】
+  const feed = $('#feed');
+  if (feed) {
+    let skeletonHTML = '';
+    for (let i = 0; i < 3; i++) {
+      skeletonHTML += `
+        <div class="skeleton-post">
+          <div class="skeleton-avatar"></div>
+          <div class="skeleton-content">
+            <div class="skeleton-line title"></div>
+            <div class="skeleton-line text"></div>
+            <div class="skeleton-line text short"></div>
+            <div class="skeleton-line actions"></div>
+          </div>
+        </div>
+      `;
+    }
+    feed.innerHTML = skeletonHTML;
+  }
+
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
@@ -1809,7 +1830,6 @@ async function initHome() {
   await loadAds();
   await loadHotsearch();
 
-  const feed = $('#feed');
   const isMobile = window.innerWidth <= 768;
   const mobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
 
