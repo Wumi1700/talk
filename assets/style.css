@@ -645,42 +645,39 @@ button.btn-primary {
 
 /* ===== 夜间模式（Dark Mode）===== */
 body.dark-mode {
-  --bg: #15202B;          /* 推特同款深灰背景 */
-  --card: #1E2732;        /* 稍浅的卡片背景 */
-  --text: #E7E9EA;        /* 主文字颜色变白 */
-  --text-muted: #8B98A5;  /* 次要文字变浅灰 */
-  --border: #38444D;      /* 分割线颜色 */
-
-  /* 如果阵营色在夜间太刺眼，可以稍微压暗一点，这里我们保留原本的色相，调整一点点亮度 */
-  --primary-light: rgba(255, 255, 255, 0.08); /* 浅色背景改成半透明白 */
+  --bg: #0F171E !important;          /* 极深蓝灰背景 */
+  --card: #15202B !important;        /* 卡片稍亮 */
+  --text: #FFFFFF !important;        /* 强制纯白文字，绝不发灰 */
+  --text-muted: #8899A6 !important;  /* 次要文字浅灰 */
+  --border: #2F3336 !important;      /* 边框色 */
+  --primary-light: rgba(255, 255, 255, 0.1) !important; 
 }
 
-/* 针对夜间模式的一些细节微调 */
-body.dark-mode .topbar {
-  background: rgba(21, 32, 43, 0.85); /* 顶栏半透明深灰 */
+body.dark-mode .topbar,
+body.dark-mode .mobile-bottom-nav {
+  background: rgba(15, 23, 30, 0.95) !important; 
+  border-color: var(--border) !important;
 }
-body.dark-mode .post:hover {
-  background: rgba(255, 255, 255, 0.03); /* 鼠标悬停帖子变亮 */
+
+body.dark-mode .post:hover { background: rgba(255, 255, 255, 0.03) !important; }
+body.dark-mode .post-body-wrapper.collapsed::after { background: linear-gradient(to bottom, transparent, var(--bg) 80%) !important; }
+body.dark-mode .btn { background: transparent !important; color: #fff !important; border-color: var(--border) !important; }
+body.dark-mode .btn:hover { background: rgba(255,255,255,0.1) !important; }
+body.dark-mode .btn-primary { background: var(--primary) !important; color: #fff !important; border: none !important; }
+body.dark-mode input, 
+body.dark-mode textarea, 
+body.dark-mode select { background: #1A2633 !important; color: #fff !important; border-color: var(--border) !important; }
+body.dark-mode .card { background: var(--card) !important; border-color: var(--border) !important; }
+body.dark-mode .sidebar-left nav a:hover, 
+body.dark-mode .sidebar-left nav a.active { background: var(--primary-light) !important; }
+
+.theme-toggle-btn {
+  background: transparent !important; border: none !important; cursor: pointer !important; padding: 6px !important;
+  display: flex !important; align-items: center !important; justify-content: center !important;
+  color: var(--text) !important; border-radius: 50% !important; transition: background 0.2s !important;
 }
-body.dark-mode .post-body-wrapper.collapsed::after {
-  background: linear-gradient(to bottom, transparent, var(--card) 80%); /* 长帖遮罩适配黑夜 */
-}
-body.dark-mode .toast {
-  background: #fff;
-  color: #15202B;
-}
-body.dark-mode .btn {
-  background: transparent;
-  color: var(--text);
-  border-color: var(--border);
-}
-body.dark-mode .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-body.dark-mode .btn-primary {
-  background: var(--primary-dark);
-  color: #fff;
-}
+.theme-toggle-btn:hover { background: var(--primary-light) !important; }
+.theme-toggle-btn svg { width: 20px !important; height: 20px !important; }
 
 /* 主题切换按钮样式 */
 .theme-toggle-btn {
