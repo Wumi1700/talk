@@ -808,3 +808,36 @@ button.btn-primary {
 .recommend-scroll-box::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ===== @ 提及选人面板 ===== */
+.mention-dropdown {
+  position: absolute;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+  width: 220px;
+  display: none;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.mention-item:hover {
+  background: var(--primary-light);
+}
+.mention-item .avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--primary-light);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.mention-item .avatar img { width: 100%; height: 100%; object-fit: cover; }
