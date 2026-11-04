@@ -1108,6 +1108,14 @@ async function toggleBookmark(postId, btn) {
   }
 }
 
+// 格式化 @ 提及，变成蓝色高亮
+function formatMentions(text) {
+  // 先转义防止 XSS
+  let safeText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // 匹配 @某人 并替换成蓝色高亮
+  return safeText.replace(/@([^\s]+)/g, '<span style="color:var(--primary-dark); font-weight:600;">@$1</span>');
+}
+
 async function loadComments(postId) {
   const list = document.getElementById(`comments-list-${postId}`);
   list.innerHTML = '<div style="font-size:13px;color:var(--muted);">加载中...</div>';
@@ -1193,7 +1201,7 @@ async function loadComments(postId) {
           ${c.is_pinned ? `<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:4px;">置顶</span>` : ''}
         </div>
         <div style="word-break:break-word;line-height:1.6;">
-          ${replyPrefix}${c.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+          ${replyPrefix}${formatMentions(c.content)}
         </div>
         <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
           <button class="comment-like-btn" data-liked="${liked}" onclick="toggleCommentLike('${c.id}', this)" style="background:none;border:none;color:${liked ? '#E76F51' : 'var(--muted)'};cursor:pointer;font-size:12px;font-family:inherit;padding:0;">
@@ -1472,17 +1480,55 @@ async function submitComment(postId) {
     const { count: dayCount } = await db.from('comments').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).gte('created_at', today);
     if (dayCount >= 10) throw new Error('每天最多评论10条');
 
+    // 1. 插入评论
     const { error } = await db.from('comments').insert({ post_id: postId, user_id: currentUser.id, content: content });
     if (error) throw new Error(error.message);
-
-    isSaved = true; // 数据已经成功入库！
-    showToast('你说了一句话'); 
     
+    // 👈 只要执行到这里，说明评论已经成功入库了！
+    isSaved = true; 
+
+    // 2. 解析 @ 并发送通知
+    const mentionRegex = /@([^\s]+)/g;
+    let match;
+    const mentionedNames = new Set();
+    while ((match = mentionRegex.exec(content)) !== null) {
+      mentionedNames.add(match[1]);
+    }
+
+    if (mentionedNames.size > 0) {
+      try {
+        const { data: users } = await db.from('profiles').select('id, username').in('username', Array.from(mentionedNames));
+        if (users && users.length > 0) {
+          const notifications = users.map(u => {
+            if (u.id === currentUser.id) return null;
+            return {
+              user_id: u.id,
+              sender_id: currentUser.id,
+              sender_name: currentProfile.username || '匿名旅者',
+              sender_avatar: currentProfile.avatar_url || '',
+              type: 'mention',
+              target_id: postId,
+              extra_text: content.slice(0, 30),
+              is_read: false
+            };
+          }).filter(Boolean);
+
+          if (notifications.length > 0) {
+            await db.from('notifications').insert(notifications);
+          }
+        }
+      } catch (mentionErr) {
+        // 如果发通知失败，只打印日志，绝不打断用户（毕竟评论已经发出去了）
+        console.error('发送 @ 通知失败:', mentionErr);
+      }
+    }
+
+    // 3. 成功提示与 UI 刷新
+    showToast('你说了一句话'); 
     input.value = '';
     const counter = document.getElementById(`char-count-${postId}`);
     if (counter) counter.textContent = '0 / 500';
     
-    // UI 刷新如果报错，不应阻止用户，也不该提示发送失败
     try {
       await loadComments(postId);
       await checkCommentQuota(postId);
@@ -2830,6 +2876,10 @@ async function initNotifications() {
       } else if (n.type === 'like_comment') {
         textHTML = `<b>${senderName}</b> 点赞了你的评论`;
         if (commentPostMap[n.target_id]) link = `post.html?id=${commentPostMap[n.target_id]}`;
+      } else if (n.type === 'mention') {
+        textHTML = `<b>${n.sender_name || '某人'}</b> 在评论中 @ 了你：<span style="color:var(--muted);">"${n.extra_text || ''}..."</span>`;
+        link = `post.html?id=${n.target_id}`;
+      } else if (n.type === 'message') {
       } else if (n.type === 'message') {
         textHTML = `<b>角色</b> 给你发了一条私信：<span style="color:var(--muted);">${n.extra_text || n.target_id}</span>`;
         link = 'message.html';
