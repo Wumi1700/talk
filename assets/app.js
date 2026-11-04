@@ -1869,7 +1869,6 @@ async function initProfile() {
 async function initHome() {
   forumReadOnly = false;
 
-  // 1. 先查一下页面上有没有内容，如果没有（或者写着加载中），立刻塞入骨架屏
   const feed = $('#feed');
   if (feed && (feed.innerHTML === '' || feed.innerHTML.includes('加载中'))) {
     let skeletonHTML = '';
@@ -1889,7 +1888,6 @@ async function initHome() {
     feed.innerHTML = skeletonHTML;
   }
 
-  // 2. 正常去加载数据（把那些故意等待的代码全删了！）
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
@@ -1930,7 +1928,6 @@ async function initHome() {
     });
   }
 
-  // 3. 渲染真实帖子（自动覆盖掉刚才的骨架屏）
   if (!displayPosts.length) {
     feed.innerHTML = mobileHotsearchHTML + '<div class="empty">还没有动态</div>';
   } else {
@@ -1959,7 +1956,7 @@ async function initHome() {
       ${renderHotsearchCard()}
       <div class="card">
         <h3>推荐角色</h3>
-        <div id="recommend">
+        <div id="recommend" class="recommend-scroll-box">
           ${Object.values(CHARACTERS).map(c => `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
               ${avatarHTML(c)}
