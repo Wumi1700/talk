@@ -1802,6 +1802,7 @@ async function initProfile() {
 // ===== 11. 页面入口 =====
 async function initHome() {
   forumReadOnly = false;
+
   const feed = $('#feed');
   if (feed) {
     let skeletonHTML = '';
@@ -1820,8 +1821,10 @@ async function initHome() {
     }
     feed.innerHTML = skeletonHTML;
   }
-    // 强制等待 1.5 秒，为了肉眼看清骨架屏（测试用）
-  await new Promise(r => setTimeout(r, 1500));
+
+  // 👈 强行等待 3 秒，让你看个够！
+  await new Promise(r => setTimeout(r, 3000));
+
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
@@ -1834,17 +1837,14 @@ async function initHome() {
 
   let displayPosts = [...POSTS];
 
-  // 如果是关注流，执行过滤
+  // 检查是否有关注过滤
   if (currentHomeTab === 'following') {
     if (!currentUser) {
       feed.innerHTML = mobileHotsearchHTML + `<div class="empty" style="padding:40px 20px;">登录后查看你关注的动态<br><br><button class="btn btn-primary" onclick="openAuthModal()">去登录</button></div>`;
       return;
     }
-    // 查我关注了谁
     const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
     const followedChars = (follows || []).map(f => f.character_id);
-    
-    // 过滤帖子
     displayPosts = POSTS.filter(p => followedChars.includes(p.character));
     
     if (!displayPosts.length) {
@@ -1852,7 +1852,6 @@ async function initHome() {
       return;
     }
   } else {
-    // 推荐流：把关注的角色排在前面（我们之前的老逻辑）
     let followedChars = [];
     if (currentUser) {
       const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
@@ -1866,7 +1865,6 @@ async function initHome() {
     });
   }
 
-  // 渲染列表
   if (!displayPosts.length) {
     feed.innerHTML = mobileHotsearchHTML + '<div class="empty">还没有动态</div>';
   } else {
@@ -1880,7 +1878,15 @@ async function initHome() {
     feed.innerHTML = mobileHotsearchHTML + parts.join('');
   }
 
-  // 右侧推荐角色 (电脑端用)
+  if (isMobile) {
+    const tabRec = document.getElementById('tab-recommend');
+    const tabFol = document.getElementById('tab-following');
+    if (tabRec && tabFol) {
+      tabRec.classList.toggle('active', currentHomeTab === 'recommend');
+      tabFol.classList.toggle('active', currentHomeTab === 'following');
+    }
+  }
+
   const sidebarRight = document.querySelector('.sidebar-right');
   if (sidebarRight) {
     sidebarRight.innerHTML = `
