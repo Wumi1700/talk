@@ -849,6 +849,45 @@ async function loadPostStats() {
   });
 }
 
+// ===== 复制帖子链接 =====
+function copyPostLink(postId, event) {
+  if (event) event.stopPropagation(); // 阻止跳转帖子
+
+  // 获取当前网站的根路径（兼容 github.io 和本地测试）
+  let basePath = location.href.split('?')[0];
+  basePath = basePath.replace(/index\.html$/, '').replace(/[^/]*$/, '');
+  const url = basePath + 'post.html?id=' + postId;
+
+  // 复制到剪贴板
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('你摘抄了一篇帖子，可以拿给别人看看');
+    }).catch(() => {
+      fallbackCopyTextToClipboard(url);
+    });
+  } else {
+    // 针对非 HTTPS 环境的兜底方案
+    fallbackCopyTextToClipboard(url);
+  }
+}
+
+function fallbackCopyTextToClipboard(text) {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.position = "fixed";
+  textArea.style.top = "-999999px";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  try {
+    document.execCommand('copy');
+    showToast('你摘抄了一篇帖子，可以拿给别人看看');
+  } catch (err) {
+    showToast('摘抄失败，请手动复制');
+  }
+  textArea.remove();
+}
+
 // ===== 切换长帖展开/折叠 =====
 function togglePostExpand(postId, event) {
   if (event) event.stopPropagation(); // 阻止点击按钮时触发帖子卡片的跳转
@@ -990,15 +1029,27 @@ function renderPostCard(post, isDetail = false) {
       
       ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
-      <div class="post-actions">
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span></button>
+      <div class="post-actions" style="display:flex; align-items:center; gap:24px;">
+        <!-- 点赞 -->
+        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}">
+          <span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span>
+        </button>
+        
+        <!-- 评论 -->
         <button class="action" onclick="location.href='post.html?id=${post.id}'">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
           <span>${commentCount}</span>
         </button>
+        
+        <!-- 赞同(收藏) -->
         <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
           <span>${isBookmarked ? '已赞同' : '赞同'}</span>
+        </button>
+
+        <!-- 复制链接（新增，推到最右侧） -->
+        <button class="action" onclick="copyPostLink('${post.id}', event)" style="margin-left:auto; padding-right:0;" title="摘抄帖子">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
         </button>
       </div>
     </article>
