@@ -895,11 +895,13 @@ function renderPostCard(post, isDetail = false) {
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
   let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
-
   const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
 
   const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
   const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a'))return;location.href='post.html?id=${post.id}'"`;
+
+  // 检查内容长度决定是否折叠
+  const shouldCollapse = post.content.length > 150 && !isDetail;
 
   return `
     <article class="post" data-id="${post.id}" ${cardClick}>
@@ -910,11 +912,13 @@ function renderPostCard(post, isDetail = false) {
           <div class="post-sub">@${char.handle} · ${relativeTime(post.date)}${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
-      <div class="post-body">${renderMarkdown(post.content)}</div>
-      <div class="post-body-wrapper ${post.content.length > 150 && !isDetail ? 'collapsed' : ''}" id="post-body-${post.id}">
+      
+      <!-- 正文唯一渲染点 -->
+      <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
         <div class="post-body">${renderMarkdown(post.content)}</div>
       </div>
-      ${post.content.length > 150 && !isDetail ? `<button class="expand-btn" id="expand-btn-${post.id}" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+      ${shouldCollapse ? `<button class="expand-btn" id="expand-btn-${post.id}" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+      
       ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
       <div class="post-actions">
@@ -3523,8 +3527,7 @@ function showFactionIntro(faction) {
 
 // ===== 夜间模式逻辑 =====
 function initTheme() {
-  const isDark = localStorage.getItem('talk_theme') === 'dark';
-  if (isDark) {
+  if (localStorage.getItem('talk_theme') === 'dark') {
     document.body.classList.add('dark-mode');
   }
 }
@@ -3535,28 +3538,29 @@ function toggleTheme() {
   updateThemeIcon(isDark);
 }
 
-// 简单图（SVG线条图标）
 const iconMoon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
 const iconSun = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
 
 function updateThemeIcon(isDark) {
-  const btns = document.querySelectorAll('.theme-toggle-btn');
-  btns.forEach(btn => {
-    btn.innerHTML = isDark ? iconSun : iconMoon; // 如果是黑暗模式，显示太阳（提示点击变亮）
+  document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
+    btn.innerHTML = isDark ? iconSun : iconMoon;
   });
 }
 
+// 页面加载时，强制插入按钮
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   updateThemeIcon(document.body.classList.contains('dark-mode'));
   
-  // 1. 电脑端顶栏插入按钮
-  const topbarActions = document.querySelector('.topbar-actions');
-  if (topbarActions) {
-    const btn = document.createElement('button');
-    btn.className = 'theme-toggle-btn';
-    btn.onclick = toggleTheme;
-    btn.title = '切换夜间模式';
-    topbarActions.insertBefore(btn, topbarActions.firstChild); // 放在登录/头像按钮的左边
-  }
+  // 给电脑端顶栏插入按钮 (因为电脑端渲染需要一丁点时间，加个延时确保能插进去)
+  setTimeout(() => {
+    const actions = document.querySelector('.topbar-actions');
+    if (actions && !actions.querySelector('.theme-toggle-btn')) {
+      const btn = document.createElement('button');
+      btn.className = 'theme-toggle-btn';
+      btn.onclick = toggleTheme;
+      btn.title = "切换夜间模式";
+      actions.insertBefore(btn, actions.firstChild);
+    }
+  }, 100);
 });
