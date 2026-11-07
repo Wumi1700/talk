@@ -994,7 +994,7 @@ async function saveHotsearch(faction) {
 }
 
 async function openCommentsPanel(postId) {
-  let replyToId = null;
+  let replyToId = null; // 当前展开回复框的评论 ID
   let filterMode = 'all';
 
   const modal = document.createElement('div');
@@ -1006,8 +1006,9 @@ async function openCommentsPanel(postId) {
     modal.innerHTML = '<div style="background:#fff;padding:20px;border-radius:12px;max-width:700px;margin:0 auto;"><div class="empty">加载中…</div></div>';
 
     const { data: comments, error } = await db.from('comments')
-      .select('id, content, created_at, user_id, as_character, status, parent_id')
+      .select('id, content, created_at, user_id, as_character, status, parent_id, is_pinned')
       .eq('post_id', postId)
+      .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -1064,8 +1065,9 @@ async function openCommentsPanel(postId) {
 
       return `
         <div style="padding:10px;border-radius:8px;background:${hidden ? '#f5c2c7' : (isRole ? '#f3eaff' : 'var(--bg)')};margin-bottom:8px;${isReply ? 'margin-left:24px;border-left:2px solid var(--border);' : ''}">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
             ${avatar} ${esc(name)} · ${new Date(c.created_at).toLocaleString('zh-CN')}
+            ${c.is_pinned ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;">置顶</span>' : ''}
             ${hidden ? ' · <span style="color:#b02a37;">已隐藏</span>' : ''}
           </div>
           <div style="font-size:13px;margin-bottom:8px;word-break:break-word;">${esc(c.content)}</div>
@@ -1148,13 +1150,19 @@ async function openCommentsPanel(postId) {
 function adminSetCommentFilter(mode) {
   if (window._setCommentFilter) window._setCommentFilter(mode);
 }
-
 function adminStartReply(commentId) {
   if (window._startReply) window._startReply(commentId);
 }
-
 function adminCancelReply() {
   if (window._cancelReply) window._cancelReply();
+}
+
+async function adminTogglePin(commentId, currentStatus) {
+  const newStatus = !currentStatus;
+  const { error } = await db.from('comments').update({ is_pinned: newStatus }).eq('id', commentId);
+  if (error) return showToast('操作失败：' + error.message);
+  showToast(newStatus ? '已置顶' : '已取消置顶');
+  if (window._refreshCommentsPanel) await window._refreshCommentsPanel();
 }
 
 async function adminSubmitReply(postId, parentId) {
@@ -1162,10 +1170,6 @@ async function adminSubmitReply(postId, parentId) {
   const content = document.querySelector(`#reply-content-${parentId}`).value.trim();
   if (!content) return showToast('请输入回复内容');
 
-  // 1. 获取角色信息（为了拿到角色的名字和头像）
-  const charInfo = CHARACTERS[handle] || {};
-
-  // 2. 插入角色评论
   const { data: newComment, error } = await db.from('comments').insert({
     post_id: postId,
     user_id: null,
@@ -1177,14 +1181,15 @@ async function adminSubmitReply(postId, parentId) {
 
   if (error) return showToast('回复失败：' + error.message);
 
-  // 3. 给被回复的用户发通知（核心：存下角色的名字和头像）
+  // 通知被回复的用户
   const { data: parentComment } = await db.from('comments').select('user_id').eq('id', parentId).single();
   if (parentComment && parentComment.user_id) {
+    const charInfo = CHARACTERS[handle] || {};
     await db.from('notifications').insert({
       user_id: parentComment.user_id,
-      sender_id: null, // 角色不需要 uuid
-      sender_name: charInfo.name || handle, // 👈 这里存角色的名字（如：布兰森）
-      sender_avatar: charInfo.avatar || '', // 👈 这里存角色的头像
+      sender_id: null,
+      sender_name: charInfo.name || handle,
+      sender_avatar: charInfo.avatar || '',
       type: 'reply_comment',
       target_id: newComment.id,
       extra_text: content.slice(0, 30),
@@ -1193,7 +1198,7 @@ async function adminSubmitReply(postId, parentId) {
   }
   
   showToast('已回复');
-  if (window._cancelReply) window._cancelReply();
+  if (window._cancelReply) window._cancelReply(); // 关闭回复框并刷新列表
 }
 
 async function adminPostAsCharacter(postId) {
@@ -1201,7 +1206,6 @@ async function adminPostAsCharacter(postId) {
   const content = document.querySelector('#cm-char-content').value.trim();
   if (!content) return showToast('请输入内容');
 
-  // 顶层评论，不需要 parent_id，也不需要发通知（因为不是回复某人）
   const { error } = await db.from('comments').insert({
     post_id: postId,
     user_id: null,
