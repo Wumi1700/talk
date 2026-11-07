@@ -1412,7 +1412,7 @@ function showMentionDropdown(inputEl, postId) {
     dropdown.innerHTML = `<div style="padding:12px; font-size:12px; color:#888; text-align:center;">暂无其他可 @ 的用户</div>`;
   } else {
     dropdown.innerHTML = currentPostMentions.map((m) => `
-      <div class="mention-item" onclick="insertMention('${postId}', '${m.name}')">
+      <div class="mention-item" onmousedown="event.preventDefault()" onclick="insertMention('${postId}', '${m.name}')">
         <div class="avatar">${m.avatar ? `<img src="${m.avatar}">` : m.name.charAt(0)}</div>
         <div>${m.faction ? factionIcon(m.faction) + ' ' : ''}${m.name}</div>
       </div>
@@ -2299,11 +2299,12 @@ async function initPost() {
       }
     });
 
-    commentInput.addEventListener('blur', () => {
-      setTimeout(() => {
-        const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
-        if (dropdown) dropdown.style.display = 'none';
-      }, 200);
+    document.addEventListener('click', (e) => {
+      const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
+      // 如果下拉框存在，且点击的不是输入框，也不是下拉框里面的内容，就隐藏
+      if (dropdown && !dropdown.contains(e.target) && e.target !== commentInput) {
+        dropdown.style.display = 'none';
+      }
     });
   }
 
