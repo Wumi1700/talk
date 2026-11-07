@@ -841,3 +841,51 @@ button.btn-primary {
   overflow: hidden;
 }
 .mention-item .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ===== 管理员页面专属布局 ===== */
+.admin-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  max-width: 1400px;
+}
+.admin-sidebar {
+  position: sticky;
+  top: 80px;
+  align-self: start;
+}
+
+/* 手机端适配（屏幕 < 768px） */
+@media (max-width: 768px) {
+  .admin-layout {
+    display: flex;
+    flex-direction: column; /* 变成上下排列 */
+    padding: 10px !important;
+  }
+  .admin-sidebar {
+    position: static; /* 取消吸顶，不然会遮挡内容 */
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  /* 把左侧的上下菜单，变成横向滑动的胶囊 */
+  #admin-nav {
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 5px;
+    -webkit-overflow-scrolling: touch;
+  }
+  #admin-nav::-webkit-scrollbar { display: none; } /* 隐藏滚动条 */
+  
+  #admin-nav a {
+    margin-bottom: 0 !important;
+    margin-right: 8px;
+    flex-shrink: 0;
+    padding: 8px 14px !important;
+  }
+
+  /* 让中间的内容区占满屏幕 */
+  #admin-app {
+    width: 100%;
+  }
+}
