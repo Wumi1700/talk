@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>管理台 · TALK</title>
   <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
   <script src="assets/supabase.min.js"></script>
@@ -23,10 +24,12 @@
     </div>
   </header>
 
-  <div class="layout" style="grid-template-columns:200px 1fr;max-width:1400px;">
-    <aside style="position:sticky;top:80px;align-self:start;">
+  <!-- 👈 注意这里：只有 admin-layout 和 admin-sidebar，绝对没有写死的 style 了 -->
+  <div class="layout admin-layout">
+    <aside class="admin-sidebar">
       <nav id="admin-nav"></nav>
     </aside>
+    
     <main id="admin-app">
       <div class="empty" style="padding:60px 20px;text-align:center;color:var(--muted);">加载中…</div>
     </main>
