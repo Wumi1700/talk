@@ -3876,3 +3876,84 @@ function showFactionIntro(faction) {
   
   document.body.appendChild(modal);
 }
+
+// ===== 全局键盘快捷键系统 =====
+document.addEventListener('keydown', (e) => {
+  const activeEl = document.activeElement;
+  const isTyping = activeEl && (
+    activeEl.tagName === 'INPUT' || 
+    activeEl.tagName === 'TEXTAREA' || 
+    activeEl.isContentEditable
+  );
+
+  // 1. 如果你正在输入框里打字（评论、私信、搜索等）
+  if (isTyping) {
+    // 按 Enter 发送（不按 Shift 的情况）
+    if (e.key === 'Enter' && !e.shiftKey) {
+      // 阻止默认的换行行为
+      e.preventDefault(); 
+      
+      // 寻找附近的发送按钮并点击
+      // 如果是评论框（textarea）
+      if (activeEl.tagName === 'TEXTAREA') {
+        const id = activeEl.id; // 比如 comment-input-2026-xx-xx
+        if (id && id.startsWith('comment-input-')) {
+          const postId = id.replace('comment-input-', '');
+          const btn = document.getElementById(`submit-btn-${postId}`);
+          if (btn && !btn.disabled) btn.click();
+        } else {
+          // 如果是回复某个人的输入框（比如 reply-input-xxx）
+          const btn = activeEl.parentElement.querySelector('button.btn-primary');
+          if (btn) btn.click();
+        }
+      } 
+      // 如果是私信输入框（input）
+      else if (activeEl.tagName === 'INPUT' && activeEl.id === 'message-input') {
+        const btn = document.querySelector('button[onclick^="submitMessage"]');
+        if (btn && !btn.disabled) btn.click();
+      }
+      // 如果是顶部的搜索框
+      else if (activeEl.closest('.search-box')) {
+        const q = activeEl.value.trim();
+        if (q) location.href = 'search.html?q=' + encodeURIComponent(q);
+      }
+    }
+
+    // 按 Esc 退出输入状态
+    if (e.key === 'Escape') {
+      activeEl.blur();
+    }
+    return; // 在输入框里时，不触发下面的全局快捷键
+  }
+
+  // 2. 如果你没在打字，处于看网页的状态
+  switch (e.key) {
+    case '/':
+      // 按 / 聚焦搜索框
+      e.preventDefault();
+      const searchInput = document.querySelector('.search-box input');
+      if (searchInput) searchInput.focus();
+      break;
+    case 'h':
+    case 'H':
+      // 按 H 回首页
+      window.location.href = 'index.html';
+      break;
+    case 'n':
+    case 'N':
+      // 按 N 去通知中心
+      window.location.href = 'notifications.html';
+      break;
+    case ' ':
+      // 按空格翻页
+      e.preventDefault(); // 阻止默认的滚动，我们用平滑滚动
+      if (e.shiftKey) {
+        // Shift + 空格 向上滚
+        window.scrollBy({ top: -window.innerHeight * 0.8, behavior: 'smooth' });
+      } else {
+        // 空格 向下滚
+        window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
+      }
+      break;
+  }
+});
