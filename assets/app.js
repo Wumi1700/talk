@@ -1192,7 +1192,6 @@ async function loadComments(postId) {
     const liked = !!likedByMe[c.id];
     const canDelete = !c.as_character && currentUser && c.user_id === currentUser.id;
 
-    // 注意看这里：只渲染一次头像和名字！
     return `
       <div style="font-size:13px;margin-bottom:8px;padding:8px;background:var(--bg);border-radius:6px;${isReply ? 'margin-left:24px;' : ''}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
@@ -1221,7 +1220,7 @@ async function loadComments(postId) {
     `;
   };
 
-  // 5. 构建树，平铺所有子孙评论
+  // 5. 构建树，平铺所有子孙评论并实现折叠
   const childrenMap = {};
   data.forEach(c => {
     if (c.parent_id) {
@@ -1244,15 +1243,52 @@ async function loadComments(postId) {
   const roots = data.filter(c => !c.parent_id);
   
   roots.forEach(root => {
+    // 渲染主评论
     html += renderOne(root, false);
+    
     const descendants = collectDescendants(root.id);
     descendants.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-    descendants.forEach(desc => {
-      html += renderOne(desc, true);
-    });
+    
+    if (descendants.length > 2) {
+      // 超过2条，渲染前2条
+      html += renderOne(descendants[0], true);
+      html += renderOne(descendants[1], true);
+      
+      // 剩下的放进隐藏容器
+      const hiddenReplies = descendants.slice(2).map(desc => renderOne(desc, true)).join('');
+      html += `
+        <div id="hidden-replies-${root.id}" style="display:none;">
+          ${hiddenReplies}
+        </div>
+        <div style="margin-left:24px; margin-top:-4px; margin-bottom:12px;">
+          <button class="expand-replies-btn" data-expand-text="展开 ${descendants.length - 2} 条回复" onclick="toggleReplies('${root.id}', this)" style="background:none;border:none;color:var(--primary-dark);font-size:13px;font-weight:600;cursor:pointer;padding:4px 0;font-family:inherit;">
+            展开 ${descendants.length - 2} 条回复
+          </button>
+        </div>
+      `;
+    } else {
+      // 2条以内，直接全部渲染
+      descendants.forEach(desc => {
+        html += renderOne(desc, true);
+      });
+    }
   });
   
   list.innerHTML = html;
+}
+
+// ===== 展开/收起楼中楼回复 =====
+function toggleReplies(rootId, btn) {
+  const container = document.getElementById(`hidden-replies-${rootId}`);
+  if (!container) return;
+
+  if (container.style.display === 'none') {
+    container.style.display = 'block';
+    btn.textContent = '收起回复';
+  } else {
+    container.style.display = 'none';
+    btn.textContent = btn.dataset.expandText; // 恢复成“展开 X 条回复”
+  }
 }
 
 function showReplyBox(commentId) {
