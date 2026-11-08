@@ -1703,13 +1703,14 @@ async function renderStats() {
   const todayISO = today.toISOString();
 
   const [
-    totalUsers, totalComments, totalMessages, totalFollows,
+    totalUsers, totalComments, totalMessages, totalFollows, totalReports,
     todayUsers, todayComments, todayMessages, todayFollows, todayLikes, todayBookmarks
   ] = await Promise.all([
     db.from('profiles').select('*', { count: 'exact', head: true }),
     db.from('comments').select('*', { count: 'exact', head: true }),
     db.from('messages').select('*', { count: 'exact', head: true }),
     db.from('follows').select('*', { count: 'exact', head: true }),
+    db.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     db.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
     db.from('comments').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
     db.from('messages').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
@@ -1718,8 +1719,9 @@ async function renderStats() {
     db.from('bookmarks').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
   ]);
 
-  const big = (label, n, icon) => `
-    <div class="card" style="margin:0;padding:16px;">
+  // 👈 修改了辅助函数，支持传入 href，如果传了，就变成可点击的
+  const big = (label, n, icon, href = null) => `
+    <div class="card" style="margin:0;padding:16px;${href ? 'cursor:pointer; transition:transform 0.1s;' : ''}" ${href ? `onclick="location.hash='${href}'"` : ''} onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
       <div style="font-size:22px;margin-bottom:6px;">${icon}</div>
       <div style="font-size:28px;font-weight:800;color:var(--primary-dark);">${n}</div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px;">${label}</div>
@@ -1727,21 +1729,25 @@ async function renderStats() {
   `;
 
   root.innerHTML = `
-    <div class="card"><h3>数据看板</h3><p style="font-size:13px;color:var(--muted);margin-top:6px;">总共</p></div>
+    <div class="card"><h3>数据看板</h3><p style="font-size:13px;color:var(--muted);margin-top:6px;">点击卡片可直接跳转到对应管理页</p></div>
+    
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;">
-      ${big('用户', totalUsers.count || 0, '👥')}
-      ${big('评论', totalComments.count || 0, '💬')}
-      ${big('私信', totalMessages.count || 0, '✉️')}
-      ${big('关注', totalFollows.count || 0, '⭐')}
+      ${big('总用户', totalUsers.count || 0, '👥', '#users')}
+      ${big('总评论', totalComments.count || 0, '💬', '#content')}
+      ${big('总私信', totalMessages.count || 0, '✉️', '#inbox')}
+      ${big('待处理举报', totalReports.count || 0, '🚨', '#reports')}
+      ${big('总关注', totalFollows.count || 0, '⭐', null)}
     </div>
-    <div class="card" style="margin-top:16px;"><h3>今日</h3></div>
+    
+    <div class="card" style="margin-top:16px;"><h3>今日数据</h3></div>
+    
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;">
-      ${big('新用户', todayUsers.count || 0, '🆕')}
-      ${big('新评论', todayComments.count || 0, '💬')}
-      ${big('新私信', todayMessages.count || 0, '✉️')}
-      ${big('新关注', todayFollows.count || 0, '⭐')}
-      ${big('新点赞', todayLikes.count || 0, '♥')}
-      ${big('新赞同', todayBookmarks.count || 0, '🔖')}
+      ${big('新用户', todayUsers.count || 0, '🆕', '#users')}
+      ${big('新评论', todayComments.count || 0, '💬', '#content')}
+      ${big('新私信', todayMessages.count || 0, '✉️', '#inbox')}
+      ${big('新关注', todayFollows.count || 0, '⭐', null)}
+      ${big('新点赞', todayLikes.count || 0, '♥', null)}
+      ${big('新赞同', todayBookmarks.count || 0, '🔖', null)}
     </div>
   `;
 }
