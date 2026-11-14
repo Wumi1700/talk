@@ -806,23 +806,6 @@ function normalizeCharacter(c) {
   };
 }
 
-function normalizePost(p) {
-  return {
-    id: p.id,
-    character: p.character,
-    date: p.date || '',
-    tags: p.tags || [],
-    location: p.location || '',
-    images: p.images || [],
-    content: p.content || '',
-    postType: p.post_type || 'main',
-    faction: p.faction || '',
-    event: p.event || '',
-    archived: p.archived || false,
-    isPinned: p.is_pinned || false
-  };
-}
-
 async function loadData() {
   const CACHE_KEY = 'talk_data_cache_v2';
   const VERSION_KEY = 'talk_data_version';
@@ -1034,66 +1017,6 @@ function openImageViewer(images, startIndex = 0) {
       });
     }
   };
-}
-
-function renderPostCard(post, isDetail = false, showPin = false) {
-  const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
-  const tags = (post.tags || []).map(t => `<a href="tags.html?tag=${encodeURIComponent(t)}" class="tag">#${t}</a>`).join('');
-  const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
-
-  let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
-  const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
-
-  const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
-  const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a'))return;location.href='post.html?id=${post.id}'"`;
-
-  // 检查内容长度决定是否折叠
-  const shouldCollapse = post.content.length > 150 && !isDetail;
-
-  return `
-    <article class="post" data-id="${post.id}" ${cardClick}>
-      <div class="post-header">
-        ${avatarHTML(char)}
-        <div class="post-meta">
-          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}${(showPin && post.isPinned) ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">📌 置顶</span>' : ''}</div>
-           <div class="post-sub">@${char.handle} · ${post.date || ''}${post.location ? ' · 📍'+post.location : ''}</div>
-        </div>
-      </div>
-      
-      <!-- 正文唯一渲染点 -->
-      <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
-        <div class="post-body">${renderMarkdown(post.content)}</div>
-      </div>
-      ${shouldCollapse ? `<button class="expand-btn" id="expand-btn-${post.id}" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
-      
-      ${renderPostImages(post.images)}
-      ${post.poll_data ? `<div class="poll-box" id="poll-box-${post.id}"><div class="empty">加载投票中...</div></div>` : ''}
-      <div class="post-tags">${tags}</div>
-      <div class="post-actions" style="display:flex; align-items:center; gap:24px;">
-        <!-- 点赞 -->
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}">
-          <span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span>
-        </button>
-        
-        <!-- 评论 -->
-        <button class="action" onclick="location.href='post.html?id=${post.id}'">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-          <span>${commentCount}</span>
-        </button>
-        
-        <!-- 赞同(收藏) -->
-        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-          <span>${isBookmarked ? '已赞同' : '赞同'}</span>
-        </button>
-
-        <!-- 复制链接（新增，推到最右侧） -->
-        <button class="action" onclick="copyPostLink('${post.id}', event)" style="margin-left:auto; padding-right:0;" title="摘抄帖子">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-        </button>
-      </div>
-    </article>
-  `;
 }
 
 // ===== 6. 互动功能 =====
@@ -2102,166 +2025,6 @@ let homeDisplayPosts = [];
 const POSTS_PER_PAGE = 10;
 let homeMobileHotsearchHTML = '';
 
-async function initHome() {
-  forumReadOnly = false;
-
-  const feed = $('#feed');
-  if (feed) {
-    let skeletonHTML = '';
-    for (let i = 0; i < 3; i++) {
-      skeletonHTML += `
-        <div class="skeleton-post">
-          <div class="skeleton-avatar"></div>
-          <div class="skeleton-content">
-            <div class="skeleton-line title"></div>
-            <div class="skeleton-line text"></div>
-            <div class="skeleton-line text short"></div>
-            <div class="skeleton-line actions"></div>
-          </div>
-        </div>
-      `;
-    }
-    feed.innerHTML = skeletonHTML;
-  }
-
-  await checkUser();
-  if (currentProfile && currentProfile.is_banned) return;
-  await loadData();
-  await loadPostStats();
-  await loadAds();
-  await loadHotsearch();
-
-  const isMobile = window.innerWidth <= 768;
-  homeMobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
-
-  let displayPosts = [...POSTS];
-
-  // 检查是否有关注过滤
-  if (currentHomeTab === 'following') {
-    if (!currentUser) {
-      feed.innerHTML = homeMobileHotsearchHTML + `<div class="empty" style="padding:40px 20px;">登录后查看你关注的动态<br><br><button class="btn btn-primary" onclick="openAuthModal()">去登录</button></div>`;
-      return;
-    }
-    const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
-    const followedChars = (follows || []).map(f => f.character_id);
-    displayPosts = POSTS.filter(p => followedChars.includes(p.character));
-    
-    if (!displayPosts.length) {
-      feed.innerHTML = homeMobileHotsearchHTML + '<div class="empty" style="padding:40px;">你关注的角色还没有发动态哦~</div>';
-      return;
-    }
-  } else {
-    let followedChars = [];
-    if (currentUser) {
-      const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
-      followedChars = (follows || []).map(f => f.character_id);
-    }
-    displayPosts.sort((a, b) => {
-      const aF = followedChars.includes(a.character) ? 1 : 0;
-      const bF = followedChars.includes(b.character) ? 1 : 0;
-      if (aF !== bF) return bF - aF;
-      return (b.date || '').localeCompare(a.date || '');
-    });
-  }
-
-  // 初始化分页数据
-  homeDisplayPosts = displayPosts;
-  homeCurrentPage = 0;
-
-  if (!homeDisplayPosts.length) {
-    feed.innerHTML = homeMobileHotsearchHTML + '<div class="empty">还没有动态</div>';
-  } else {
-    feed.innerHTML = homeMobileHotsearchHTML;
-    renderHomePosts(); // 渲染第一页
-  }
-
-  // 更新手机端 Tab 激活状态
-  if (isMobile) {
-    const tabRec = document.getElementById('tab-recommend');
-    const tabFol = document.getElementById('tab-following');
-    if (tabRec && tabFol) {
-      tabRec.classList.toggle('active', currentHomeTab === 'recommend');
-      tabFol.classList.toggle('active', currentHomeTab === 'following');
-    }
-  }
-
-  // 渲染右侧栏
-  const sidebarRight = document.querySelector('.sidebar-right');
-  if (sidebarRight) {
-    sidebarRight.innerHTML = `
-      ${renderHotsearchCard()}
-      <div class="card">
-        <h3>推荐角色</h3>
-        <div id="recommend">
-          ${Object.values(CHARACTERS).map(c => `
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-              ${avatarHTML(c)}
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:600;font-size:14px"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
-                <div style="font-size:12px;color:var(--text-muted)">@${c.handle}</div>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }
-}
-  initAllPolls();
-
-// 渲染一页帖子（被 initHome 和滚动监听调用）
-function renderHomePosts() {
-  const feed = $('#feed');
-  if (!feed) return;
-
-  const start = homeCurrentPage * POSTS_PER_PAGE;
-  const end = start + POSTS_PER_PAGE;
-  const pagePosts = homeDisplayPosts.slice(start, end);
-
-  if (pagePosts.length === 0) return;
-
-  const parts = [];
-  for (let i = 0; i < pagePosts.length; i++) {
-    const globalIndex = start + i;
-    parts.push(renderPostCard(pagePosts[i]));
-    if ((globalIndex + 1) % 3 === 0) {
-      parts.push(renderAdCard());
-    }
-  }
-
-  // 移除旧的底部加载提示
-  const oldLoader = document.getElementById('home-loader');
-  if (oldLoader) oldLoader.remove();
-
-  feed.insertAdjacentHTML('beforeend', parts.join(''));
-  homeCurrentPage++;
-
-  // 如果还有更多，把加载提示塞到最底下
-  if (end < homeDisplayPosts.length) {
-    feed.insertAdjacentHTML('beforeend', `
-      <div id="home-loader" style="text-align: center; padding: 30px; color: var(--muted); font-size: 13px;">
-        <div style="display:inline-block; width:24px; height:24px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation: spin 1s linear infinite;"></div>
-        <div style="margin-top:10px;">上滑加载更多...</div>
-      </div>
-      <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
-    `);
-  }
-}
-
-// 监听网页滚动，触底自动加载
-window.addEventListener('scroll', () => {
-  const path = location.pathname;
-  const isHome = path.endsWith('index.html') || path.endsWith('/') || path.endsWith('/talk/');
-  if (!isHome) return;
-
-  // 距离底部 300px 的时候，自动触发加载
-  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) {
-    if (homeCurrentPage * POSTS_PER_PAGE < homeDisplayPosts.length) {
-      renderHomePosts();
-    }
-  }
-});
-
 // 切换推荐/关注
 function switchHomeTab(tab) {
   if (currentHomeTab === tab) return;
@@ -2378,82 +2141,6 @@ async function toggleArchivedPosts(handle) {
   
   tabContent.innerHTML = posts.map(p => renderPostCard(p)).join('');
 }
-
-async function initPost() {
-  await checkUser();
-  await loadData();
-  await loadForumData();
-  await loadPostStats();
-  const id = new URLSearchParams(location.search).get('id');
-  const post = POSTS.find(p => p.id === id) || FORUM_POSTS.find(p => p.id === id);
-
-  const isForumPost = FORUM_POSTS.some(p => p.id === id);
-  if (isForumPost && currentProfile && post && post.faction && post.faction !== currentProfile.faction) {
-    forumReadOnly = true;
-  } else {
-    forumReadOnly = false;
-  }
-
-  const root = $('#post-detail');
-  if (!post) {
-    root.innerHTML = '<div class="empty">找不到这篇帖子</div>';
-    return;
-  }
-
-  root.innerHTML = `
-    <a href="index.html" style="font-size:14px">← 返回首页</a>
-    <div style="margin-top:16px">${renderPostCard(post, true)}</div>
-    <div style="margin-top:16px;padding:44px 20px;text-align:center;background:var(--bg);border:2px dashed var(--border);border-radius:12px;color:var(--muted);font-size:14px;letter-spacing:2px;">
-      📢 广告位招租
-    </div>
-    <div class="card" style="margin-top:16px">
-      <h3>评论</h3>
-      <div id="comments-list-${post.id}" style="margin-top:10px;"></div>
-      
-      <!-- 这里是关键的相对定位包裹框 -->
-      <div style="position:relative; margin-top:12px;" id="comment-input-wrapper-${post.id}">
-        <textarea id="comment-input-${post.id}" maxlength="500" rows="3" placeholder="${forumReadOnly ? '你不是这个阵营的成员，无法评论。' : '友善是交流的起点，发一条友善的评论吧~'}" ${forumReadOnly ? 'disabled' : ''} oninput="updateCharCount('${post.id}')" style="width:100%; padding:12px; padding-bottom:24px; border:1px solid var(--border); border-radius:8px; font-family:inherit; resize:vertical; font-size:14px; outline:none; ${forumReadOnly ? 'opacity:0.5; background:#f5f5f5;' : ''}"></textarea>
-        <span id="char-count-${post.id}" style="position:absolute; right:12px; bottom:10px; font-size:12px; color:var(--muted);">0 / 500</span>
-      </div>
-      
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <button class="btn" style="padding:4px 10px; font-size:16px; font-weight:bold; border-radius:8px; color:var(--primary-dark);" onclick="showToast('正在努力绘制中ψ(｀∇´)ψ')">;)</button>
-          <div id="quota-msg-${post.id}" style="font-size:12px; color:var(--muted);">
-            <!-- 额度提示会由 JS 自动填入 -->
-          </div>
-        </div>
-        <button class="btn btn-primary" id="submit-btn-${post.id}" onclick="submitComment('${post.id}')" ${forumReadOnly ? 'disabled style="opacity:0.5;"' : ''}>发送</button>
-      </div>
-    </div>
-  `;
-
-  await prepareMentionData(post.id);
-  
-  const commentInput = document.getElementById(`comment-input-${post.id}`);
-  if (commentInput) {
-    commentInput.addEventListener('input', (e) => {
-      if (e.target.value.includes('@')) {
-        showMentionDropdown(commentInput, post.id);
-      } else {
-        const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
-        if (dropdown) dropdown.style.display = 'none';
-      }
-    });
-
-    document.addEventListener('click', (e) => {
-      const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
-      // 如果下拉框存在，且点击的不是输入框，也不是下拉框里面的内容，就隐藏
-      if (dropdown && !dropdown.contains(e.target) && e.target !== commentInput) {
-        dropdown.style.display = 'none';
-      }
-    });
-  }
-
-  await loadComments(post.id);
-  await checkCommentQuota(post.id);
-}
-  initAllPolls();
 
 // 实时字数统计
 function updateCharCount(postId) {
@@ -4403,4 +4090,372 @@ async function submitVote(postId, optionIndex, options) {
   showToast('投票成功');
   // 重新渲染当前帖子的投票框
   await renderPollUI(postId, options);
+}
+
+// ==========================================
+// ===== 核心模块：无限滚动、投票、渲染 =====
+// ==========================================
+
+// 分页控制全局变量
+let homeCurrentPage = 0;
+let homeDisplayPosts = [];
+const POSTS_PER_PAGE = 10;
+
+// 1. 数据清洗（加上 poll_data）
+function normalizePost(p) {
+  return {
+    id: p.id,
+    character: p.character,
+    date: p.date || '',
+    tags: p.tags || [],
+    location: p.location || '',
+    images: p.images || [],
+    content: p.content || '',
+    postType: p.post_type || 'main',
+    faction: p.faction || '',
+    event: p.event || '',
+    archived: p.archived || false,
+    isPinned: p.is_pinned || false,
+    poll_data: p.poll_data || null
+  };
+}
+
+// 2. 帖子卡片渲染（包含投票坑位）
+function renderPostCard(post, isDetail = false, showPin = false) {
+  const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
+  const tags = (post.tags || []).map(t => `<a href="tags.html?tag=${encodeURIComponent(t)}" class="tag">#${t}</a>`).join('');
+  const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
+
+  let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
+  const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
+
+  const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
+  const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a'))return;location.href='post.html?id=${post.id}'"`;
+  const shouldCollapse = post.content.length > 150 && !isDetail;
+
+  return `
+    <article class="post" data-id="${post.id}" ${cardClick}>
+      <div class="post-header">
+        ${avatarHTML(char)}
+        <div class="post-meta">
+          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}${(showPin && post.isPinned) ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">📌 置顶</span>' : ''}</div>
+          <div class="post-sub">@${char.handle} · <span title="${post.date || ''}">${relativeTime(post.date)}</span>${post.location ? ' · 📍'+post.location : ''}</div>
+        </div>
+      </div>
+      
+      <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
+        <div class="post-body">${renderMarkdown(post.content)}</div>
+      </div>
+      ${shouldCollapse ? `<button class="expand-btn" id="expand-btn-${post.id}" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+      
+      <!-- 投票坑位 -->
+      ${post.poll_data ? `<div class="poll-box" id="poll-box-${post.id}"><div class="empty">加载投票中...</div></div>` : ''}
+      
+      ${renderPostImages(post.images)}
+      <div class="post-tags">${tags}</div>
+      <div class="post-actions" style="display:flex; align-items:center; gap:24px;">
+        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span></button>
+        <button class="action" onclick="location.href='post.html?id=${post.id}'">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+          <span>${commentCount}</span>
+        </button>
+        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+          <span>${isBookmarked ? '已赞同' : '赞同'}</span>
+        </button>
+        <button class="action" onclick="copyPostLink('${post.id}', event)" style="margin-left:auto; padding-right:0;" title="摘抄帖子">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+// 3. 首页分页渲染（无限滚动）
+function renderHomePosts() {
+  const feed = $('#feed');
+  if (!feed) return;
+
+  const start = homeCurrentPage * POSTS_PER_PAGE;
+  const end = start + POSTS_PER_PAGE;
+  const pagePosts = homeDisplayPosts.slice(start, end);
+
+  if (pagePosts.length === 0) return;
+
+  const parts = [];
+  for (let i = 0; i < pagePosts.length; i++) {
+    const globalIndex = start + i;
+    parts.push(renderPostCard(pagePosts[i]));
+    if ((globalIndex + 1) % 3 === 0) {
+      parts.push(renderAdCard());
+    }
+  }
+
+  const oldLoader = document.getElementById('home-loader');
+  if (oldLoader) oldLoader.remove();
+
+  feed.insertAdjacentHTML('beforeend', parts.join(''));
+  homeCurrentPage++;
+
+  if (end < homeDisplayPosts.length) {
+    feed.insertAdjacentHTML('beforeend', `
+      <div id="home-loader" style="text-align: center; padding: 30px; color: var(--muted); font-size: 13px;">
+        <div style="display:inline-block; width:24px; height:24px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation: spin 1s linear infinite;"></div>
+        <div style="margin-top:10px;">上滑加载更多...</div>
+      </div>
+      <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+    `);
+  }
+
+  // 每次渲染完新帖子，立刻唤醒其中的投票模块
+  initAllPolls();
+}
+
+// 4. 投票加载、渲染与提交
+async function initAllPolls() {
+  const pollBoxes = document.querySelectorAll('.poll-box');
+  for (const box of pollBoxes) {
+    if (box.querySelector('.poll-option')) continue;
+    const postId = box.id.replace('poll-box-', '');
+    const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
+    if (post && post.poll_data) {
+      await renderPollUI(postId, post.poll_data.options);
+    }
+  }
+}
+
+async function renderPollUI(postId, options) {
+  const box = document.getElementById(`poll-box-${postId}`);
+  if (!box) return;
+
+  const { data: votes } = await db.from('post_votes').select('user_id, option_index').eq('post_id', postId);
+  const totalVotes = (votes || []).length;
+  let myVoteIndex = -1;
+  if (currentUser && votes) {
+    const myVote = votes.find(v => v.user_id === currentUser.id);
+    if (myVote) myVoteIndex = myVote.option_index;
+  }
+
+  const counts = options.map((_, i) => (votes || []).filter(v => v.option_index === i).length);
+  let html = `<div class="poll-title">📊 投票</div>`;
+
+  options.forEach((opt, i) => {
+    const count = counts[i];
+    const percent = totalVotes === 0 ? 0 : Math.round((count / totalVotes) * 100);
+    const isVoted = myVoteIndex !== -1;
+    const isMyVote = myVoteIndex === i;
+
+    html += `
+      <div class="poll-option ${isVoted ? 'voted' : ''} ${isMyVote ? 'my-vote' : ''}" 
+           ${!isVoted ? `onclick="submitVote('${postId}', ${i}, ${JSON.stringify(options).replace(/"/g, '&quot;')})"` : ''}>
+        ${isVoted ? `<div class="poll-progress" style="width: ${percent}%;"></div>` : ''}
+        <div class="poll-text">
+          <span>${esc(opt)} ${isMyVote ? '<span class="check">✓</span>' : ''}</span>
+          ${isVoted ? `<span style="font-size:13px; color:var(--text-muted);">${count}票 (${percent}%)</span>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  html += `<div class="poll-total">共 ${totalVotes} 人参与</div>`;
+  box.innerHTML = html;
+}
+
+async function submitVote(postId, optionIndex, options) {
+  if (!currentUser) return showToast('请先登录后再投票');
+  
+  const { data: existing } = await db.from('post_votes').select('id').eq('post_id', postId).eq('user_id', currentUser.id);
+  if (existing && existing.length > 0) return showToast('你已经投过票了');
+
+  const { error } = await db.from('post_votes').insert({
+    post_id: postId, user_id: currentUser.id, option_index: optionIndex
+  });
+
+  if (error) return showToast('投票失败：' + error.message);
+  showToast('投票成功');
+  await renderPollUI(postId, options);
+}
+
+// 5. 重写首页入口 (包含分页初始化)
+async function initHome() {
+  forumReadOnly = false;
+  const feed = $('#feed');
+  
+  // 骨架屏
+  if (feed && (feed.innerHTML === '' || feed.innerHTML.includes('加载中'))) {
+    let skeletonHTML = '';
+    for (let i = 0; i < 3; i++) {
+      skeletonHTML += `
+        <div class="skeleton-post">
+          <div class="skeleton-avatar"></div>
+          <div class="skeleton-content">
+            <div class="skeleton-line title"></div>
+            <div class="skeleton-line text"></div>
+            <div class="skeleton-line text short"></div>
+            <div class="skeleton-line actions"></div>
+          </div>
+        </div>
+      `;
+    }
+    feed.innerHTML = skeletonHTML;
+  }
+
+  await checkUser();
+  if (currentProfile && currentProfile.is_banned) return;
+  await loadData();
+  await loadPostStats();
+  await loadAds();
+  await loadHotsearch();
+
+  const isMobile = window.innerWidth <= 768;
+  const mobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
+
+  let displayPosts = [...POSTS];
+
+  if (currentHomeTab === 'following') {
+    if (!currentUser) {
+      feed.innerHTML = mobileHotsearchHTML + `<div class="empty" style="padding:40px 20px;">登录后查看你关注的动态<br><br><button class="btn btn-primary" onclick="openAuthModal()">去登录</button></div>`;
+      return;
+    }
+    const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
+    const followedChars = (follows || []).map(f => f.character_id);
+    displayPosts = POSTS.filter(p => followedChars.includes(p.character));
+    
+    if (!displayPosts.length) {
+      feed.innerHTML = mobileHotsearchHTML + '<div class="empty" style="padding:40px;">你关注的角色还没有发动态哦~</div>';
+      return;
+    }
+  } else {
+    let followedChars = [];
+    if (currentUser) {
+      const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
+      followedChars = (follows || []).map(f => f.character_id);
+    }
+    displayPosts.sort((a, b) => {
+      const aF = followedChars.includes(a.character) ? 1 : 0;
+      const bF = followedChars.includes(b.character) ? 1 : 0;
+      if (aF !== bF) return bF - aF;
+      return (b.date || '').localeCompare(a.date || '');
+    });
+  }
+
+  homeDisplayPosts = displayPosts;
+  homeCurrentPage = 0;
+
+  if (!homeDisplayPosts.length) {
+    feed.innerHTML = mobileHotsearchHTML + '<div class="empty">还没有动态</div>';
+  } else {
+    feed.innerHTML = mobileHotsearchHTML;
+    renderHomePosts();
+  }
+
+  if (isMobile) {
+    const tabRec = document.getElementById('tab-recommend');
+    const tabFol = document.getElementById('tab-following');
+    if (tabRec && tabFol) {
+      tabRec.classList.toggle('active', currentHomeTab === 'recommend');
+      tabFol.classList.toggle('active', currentHomeTab === 'following');
+    }
+  }
+
+  const sidebarRight = document.querySelector('.sidebar-right');
+  if (sidebarRight) {
+    sidebarRight.innerHTML = `
+      ${renderHotsearchCard()}
+      <div class="card">
+        <h3>推荐角色</h3>
+        <div id="recommend">
+          ${Object.values(CHARACTERS).map(c => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              ${avatarHTML(c)}
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:14px"><a href="character.html?handle=${c.handle}">${c.name}</a></div>
+                <div style="font-size:12px;color:var(--text-muted)">@${c.handle}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+}
+
+// 6. 帖子详情页入口 (末尾唤醒投票)
+async function initPost() {
+  await checkUser();
+  await loadData();
+  await loadForumData();
+  await loadPostStats();
+  const id = new URLSearchParams(location.search).get('id');
+  const post = POSTS.find(p => p.id === id) || FORUM_POSTS.find(p => p.id === id);
+
+  const isForumPost = FORUM_POSTS.some(p => p.id === id);
+  if (isForumPost && currentProfile && post && post.faction && post.faction !== currentProfile.faction) {
+    forumReadOnly = true;
+  } else {
+    forumReadOnly = false;
+  }
+
+  const root = $('#post-detail');
+  if (!post) {
+    root.innerHTML = '<div class="empty">找不到这篇帖子</div>';
+    return;
+  }
+
+  root.innerHTML = `
+    <a href="index.html" style="font-size:14px">← 返回首页</a>
+    <div style="margin-top:16px">${renderPostCard(post, true)}</div>
+    <div style="margin-top:16px;padding:44px 20px;text-align:center;background:var(--bg);border:2px dashed var(--border);border-radius:12px;color:var(--muted);font-size:14px;letter-spacing:2px;">
+      📢 广告位招租
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>评论</h3>
+      <div id="comments-list-${post.id}" style="margin-top:10px;"></div>
+      
+      <div style="position:relative; margin-top:12px;" id="comment-input-wrapper-${post.id}">
+        <textarea id="comment-input-${post.id}" maxlength="500" rows="3" placeholder="${forumReadOnly ? '你不是这个阵营的成员，无法评论。' : '友善是交流的起点，发一条友善的评论吧~'}" ${forumReadOnly ? 'disabled' : ''} oninput="updateCharCount('${post.id}')" style="width:100%; padding:12px; padding-bottom:24px; border:1px solid var(--border); border-radius:8px; font-family:inherit; resize:vertical; font-size:14px; outline:none; ${forumReadOnly ? 'opacity:0.5; background:#f5f5f5;' : ''}"></textarea>
+        <span id="char-count-${post.id}" style="position:absolute; right:12px; bottom:10px; font-size:12px; color:var(--muted);">0 / 500</span>
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="btn" style="padding:4px 10px; font-size:16px; font-weight:bold; border-radius:8px; color:var(--primary-dark);" onclick="showToast('正在努力绘制中ψ(｀∇´)ψ')">;)</button>
+          <div id="quota-msg-${post.id}" style="font-size:12px; color:var(--muted);"></div>
+        </div>
+        <button class="btn btn-primary" id="submit-btn-${post.id}" onclick="submitComment('${post.id}')" ${forumReadOnly ? 'disabled style="opacity:0.5;"' : ''}>发送</button>
+      </div>
+    </div>
+  `;
+
+  await prepareMentionData(post.id);
+  
+  const commentInput = document.getElementById(`comment-input-${post.id}`);
+  if (commentInput) {
+    commentInput.addEventListener('input', (e) => {
+      if (e.target.value.includes('@')) {
+        showMentionDropdown(commentInput, post.id);
+      } else {
+        const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
+        if (dropdown) dropdown.style.display = 'none';
+      }
+    });
+
+    commentInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        const dropdown = document.getElementById(`mention-dropdown-${post.id}`);
+        if (dropdown) dropdown.style.display = 'none';
+      }, 200);
+    });
+  }
+
+  await loadComments(post.id);
+  await checkCommentQuota(post.id);
+  
+  // 👈 关键：唤醒这个页面的投票组件
+  await initAllPolls();
+}
+
+// 7. 补全 esc 函数（如果之前你里面没有的话，加上这句防止报错）
+function esc(str) {
+  return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
