@@ -824,25 +824,56 @@ async function renderMainPosts() {
     grouped[p.character].push(p);
   });
 
-  // 关键：以所有角色为准，没帖子的显示 0 条
   const allChars = Object.keys(CHARACTERS).sort();
+  
+  // 👈 核心：区分主要角色和 NPC
+  const mainChars = Object.values(CHARACTERS).filter(c => !c.isNPC);
+  const npcChars = Object.values(CHARACTERS).filter(c => c.isNPC);
 
   body.innerHTML = `
-    <div class="card" style="padding:12px 16px;">
+    <div class="card" style="padding:16px;">
+      <!-- 搜索框 -->
+      <div style="margin-bottom:12px;">
+        <input id="admin-role-search" type="text" placeholder="输入角色名字搜索…" oninput="filterAdminRoles(this.value)" style="width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--border);border-radius:20px;font-size:13px;outline:none;">
+      </div>
+
+      <!-- 第一排：主要角色 -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <span style="font-size:13px;color:var(--muted);font-weight:bold;width:40px;">主要：</span>
+        <button class="btn role-btn ${contentFilter===''?'btn-primary':''}" data-name="全部" style="padding:4px 12px;font-size:13px;" onclick="filterContent('')">全部</button>
+        ${mainChars.map(c => {
+          const cnt = (grouped[c.handle] || []).length;
+          return `<button class="btn role-btn ${contentFilter===c.handle?'btn-primary':''}" data-name="${esc(c.name)} ${esc(c.handle)}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${c.handle}')">${esc(c.name)} (${cnt})</button>`;
+        }).join('')}
+      </div>
+
+      <!-- 第二排：NPC角色 -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <span style="font-size:13px;color:var(--muted);">角色：</span>
-        <button class="btn ${contentFilter===''?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('')">全部</button>
-        ${allChars.map(h => {
-          const c = CHARACTERS[h] || {};
-          const cnt = (grouped[h] || []).length;
-          return `<button class="btn ${contentFilter===h?'btn-primary':''}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${h}')">${esc(c.name || h)} (${cnt})</button>`;
+        <span style="font-size:13px;color:var(--muted);font-weight:bold;width:40px;">NPC：</span>
+        ${npcChars.map(c => {
+          const cnt = (grouped[c.handle] || []).length;
+          return `<button class="btn role-btn ${contentFilter===c.handle?'btn-primary':''}" data-name="${esc(c.name)} ${esc(c.handle)}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${c.handle}')">${esc(c.name)} (${cnt})</button>`;
         }).join('')}
       </div>
     </div>
+
     <div id="content-list">
       ${renderMainPostsList(grouped, allChars)}
     </div>
   `;
+}
+
+// 前台搜索过滤角色按钮
+function filterAdminRoles(keyword) {
+  const lower = keyword.toLowerCase();
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    const name = btn.getAttribute('data-name').toLowerCase();
+    if (name.includes(lower) || !lower) {
+      btn.style.display = 'inline-block';
+    } else {
+      btn.style.display = 'none';
+    }
+  });
 }
 
 function filterContent(handle) {
