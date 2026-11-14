@@ -1348,26 +1348,6 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
     faction: defaultFaction || '',
   };
 
-  // 1. 整理角色下拉菜单（分组：主要角色 / NPC）
-  let charOptions = '<option value="">-- 请选择角色 --</option>';
-  const mainChars = Object.values(CHARACTERS).filter(c => !c.isNPC);
-  const npcChars = Object.values(CHARACTERS).filter(c => c.isNPC);
-
-  if (mainChars.length) {
-    charOptions += `<optgroup label="主要角色">`;
-    mainChars.forEach(c => {
-      charOptions += `<option value="${c.handle}" data-faction="${c.faction || ''}" ${p.character === c.handle ? 'selected' : ''}>${esc(c.name)} (@${c.handle})</option>`;
-    });
-    charOptions += `</optgroup>`;
-  }
-  if (npcChars.length) {
-    charOptions += `<optgroup label="NPC角色">`;
-    npcChars.forEach(c => {
-      charOptions += `<option value="${c.handle}" data-faction="${c.faction || ''}" ${p.character === c.handle ? 'selected' : ''}>${esc(c.name)} (@${c.handle})</option>`;
-    });
-    charOptions += `</optgroup>`;
-  }
-
   const modal = document.createElement('div');
   modal.id = 'post-editor-modal';
   modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;padding:20px;box-sizing:border-box;';
@@ -1389,9 +1369,18 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
           <label style="font-size:12px;color:var(--muted);">发布角色</label>
-          <select id="pe-character" onchange="syncPostFaction()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#fff;">
-            ${charOptions}
-          </select>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <!-- 第一级：选大类 -->
+            <select id="pe-char-type" onchange="syncPostCharDetail()" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+              <option value="">-- 选分类 --</option>
+              <option value="main">主要角色</option>
+              <option value="npc">NPC角色</option>
+            </select>
+            <!-- 第二级：选具体人 -->
+            <select id="pe-character" onchange="syncPostFaction()" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+              <option value="">-- 先选分类 --</option>
+            </select>
+          </div>
         </div>
         <div>
           <label style="font-size:12px;color:var(--muted);">阵营（选定角色后自动填入，可手动改）</label>
@@ -1449,16 +1438,51 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
   _editorImages = [...(p.images || [])];
   document.body.appendChild(modal);
 
-  // 👈 初始化地点二级联动
+  // 初始化角色和地点
+  if (p.character) {
+    // 查一下这个角色是 NPC 还是 主要角色
+    const charData = CHARACTERS[p.character];
+    const isNPC = charData ? charData.isNPC : false;
+    document.getElementById('pe-char-type').value = isNPC ? 'npc' : 'main';
+    syncPostCharDetail(p.character); // 传入当前角色 handle，用于回显
+  }
+
   const locRegion = document.getElementById('pe-loc-region');
   if (locRegion && p.location) {
-    syncPostLocDetail(p.location); // 传入旧地点，用于回显
+    syncPostLocDetail(p.location);
   }
 
   // 如果是新建，且已经有了默认角色，自动触发一次阵营匹配
   if (p.character) {
     syncPostFaction();
   }
+}
+
+// 角色二级联动
+function syncPostCharDetail(oldChar = '') {
+  const typeSel = document.getElementById('pe-char-type');
+  const charSel = document.getElementById('pe-character');
+  if (!typeSel || !charSel) return;
+
+  const type = typeSel.value;
+  if (!type) {
+    charSel.innerHTML = '<option value="">-- 先选分类 --</option>';
+    charSel.disabled = true;
+    return;
+  }
+
+  // 根据大类过滤角色
+  const isNPC = type === 'npc';
+  const filtered = Object.values(CHARACTERS).filter(c => !!c.isNPC === isNPC);
+
+  charSel.innerHTML = '<option value="">-- 选择角色 --</option>' + filtered.map(c => 
+    `<option value="${c.handle}" data-faction="${c.faction || ''}" ${oldChar === c.handle ? 'selected' : ''}>${esc(c.name)}</option>`
+  ).join('');
+  
+  charSel.disabled = false;
+  
+  // 如果触发了回显，并且选中了角色，顺便把阵营填上
+  if (oldChar) syncPostFaction();
 }
 
 // 地点二级联动
