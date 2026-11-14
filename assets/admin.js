@@ -1332,13 +1332,12 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
   }
 
   const isNew = !post;
-  // 自动生成一个绝对不会重复的帖子
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const randomStr = Math.floor(Math.random() * 90000 + 10000);
   const autoId = `${todayStr}-${randomStr}`;
   
   const p = post || {
-    id: autoId, // 这里自动填入生成好的 ID
+    id: autoId,
     character: characterHandle || '',
     date: new Date().toISOString().slice(0, 10),
     tags: [],
@@ -1349,6 +1348,36 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
     faction: defaultFaction || '',
   };
 
+  // 1. 整理角色下拉菜单（分组：主要角色 / NPC）
+  let charOptions = '<option value="">-- 请选择角色 --</option>';
+  const mainChars = Object.values(CHARACTERS).filter(c => !c.isNPC);
+  const npcChars = Object.values(CHARACTERS).filter(c => c.isNPC);
+
+  if (mainChars.length) {
+    charOptions += `<optgroup label="主要角色">`;
+    mainChars.forEach(c => {
+      charOptions += `<option value="${c.handle}" data-faction="${c.faction || ''}" ${p.character === c.handle ? 'selected' : ''}>${esc(c.name)} (@${c.handle})</option>`;
+    });
+    charOptions += `</optgroup>`;
+  }
+  if (npcChars.length) {
+    charOptions += `<optgroup label="NPC角色">`;
+    npcChars.forEach(c => {
+      charOptions += `<option value="${c.handle}" data-faction="${c.faction || ''}" ${p.character === c.handle ? 'selected' : ''}>${esc(c.name)} (@${c.handle})</option>`;
+    });
+    charOptions += `</optgroup>`;
+  }
+
+  // 2. 整理地点下拉菜单
+  let locOptions = `<option value="">-- 不填地点 --</option>`;
+  Object.entries(ADMIN_LOCATIONS).forEach(([region, places]) => {
+    locOptions += `<optgroup label="${region}">`;
+    places.forEach(place => {
+      locOptions += `<option value="${place}" ${p.location === place ? 'selected' : ''}>${place}</option>`;
+    });
+    locOptions += `</optgroup>`;
+  });
+
   const modal = document.createElement('div');
   modal.id = 'post-editor-modal';
   modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;padding:20px;box-sizing:border-box;';
@@ -1358,79 +1387,98 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
-          <label style="font-size:12px;color:var(--muted);">帖子 ID</label>
+          <label style="font-size:12px;color:var(--muted);">帖子 ID（系统自动生成）</label>
           <input id="pe-id" type="text" value="${esc(p.id)}" disabled style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#f5f5f5;">
         </div>
         <div>
-          <label style="font-size:12px;color:var(--muted);">角色 handle</label>
-          <input id="pe-character" type="text" value="${esc(p.character)}" placeholder="如 daniel / tt" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+          <label style="font-size:12px;color:var(--muted);">发布日期</label>
+          <input id="pe-date" type="text" value="${esc(p.date)}" placeholder="YYYY-MM-DD" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
-          <label style="font-size:12px;color:var(--muted);">日期</label>
-          <input id="pe-date" type="text" value="${esc(p.date)}" placeholder="YYYY-MM-DD" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+          <label style="font-size:12px;color:var(--muted);">发布角色</label>
+          <select id="pe-character" onchange="syncPostFaction()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#fff;">
+            ${charOptions}
+          </select>
         </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">阵营（选定角色后自动填入，可手动改）</label>
+          <input id="pe-faction" type="text" value="${esc(p.faction)}" placeholder="如 人类 / 精灵 / 中立" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
           <label style="font-size:12px;color:var(--muted);">地点</label>
           <select id="pe-location" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#fff;">
-            <option value="">不填地点</option>
-            ${Object.entries(ADMIN_LOCATIONS).map(([region, places]) => `
-              <optgroup label="${region}">
-                ${places.map(place => `<option value="${place}" ${p.location === place ? 'selected' : ''}>${place}</option>`).join('')}
-              </optgroup>
-            `).join('')}
+            ${locOptions}
           </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);">标签（英文逗号分隔）</label>
+          <input id="pe-tags" type="text" value="${esc((p.tags || []).join(','))}" placeholder="日常,公告" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
         </div>
       </div>
 
       <div style="margin-bottom:10px;">
-        <label style="font-size:12px;color:var(--muted);">图片（点按钮上传，可多张）</label>
+        <label style="font-size:12px;color:var(--muted);">图片（点按钮上传）</label>
         <div id="pe-image-list" style="margin-top:6px;">${renderImageList(p.images || [])}</div>
         <button class="btn" type="button" style="margin-top:8px;font-size:13px;padding:4px 12px;" onclick="pickImages(addImageToEditor)">+ 上传图片</button>
       </div>
 
-      <div style="margin-bottom:10px;">
-        <label style="font-size:12px;color:var(--muted);">图片路径（英文逗号分隔）</label>
-        <input id="pe-images" type="text" value="${esc((p.images || []).join(','))}" placeholder="images/posts/b-1.webp" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
-      </div>
-
-      ${p.post_type === 'main' ? `
-        <div style="margin-bottom:10px;">
-          <label style="font-size:13px; display:flex; align-items:center; gap:6px; cursor:pointer;">
-            <input type="checkbox" id="pe-is-pinned" ${p.is_pinned ? 'checked' : ''}> 在角色主页置顶此帖
-          </label>
-        </div>
-      ` : ''}
-
       ${p.post_type === 'forum' ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div>
-            <label style="font-size:12px;color:var(--muted);">阵营</label>
-            <input id="pe-faction" type="text" value="${esc(p.faction)}" placeholder="精灵/矮人/人类/异人/240/246/240-1" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
-          </div>
-          <div>
-            <label style="font-size:12px;color:var(--muted);">节日（可空）</label>
-            <input id="pe-event" type="text" value="${esc(p.event)}" placeholder="如 月亮节" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
-          </div>
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:var(--muted);">节日（可空）</label>
+          <input id="pe-event" type="text" value="${esc(p.event)}" placeholder="如 月亮节" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;">
         </div>
       ` : ''}
 
       <div style="margin-bottom:16px;">
         <label style="font-size:12px;color:var(--muted);">正文（Markdown）</label>
-        <textarea id="pe-content" rows="12" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:4px;font-family:monospace;font-size:13px;resize:vertical;">${esc(p.content)}</textarea>
+        <textarea id="pe-content" rows="10" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:4px;font-family:monospace;font-size:13px;resize:vertical;">${esc(p.content)}</textarea>
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="savePost('${isNew ? 'new' : 'edit'}', '${esc(p.post_type)}')">保存</button>
         ${!isNew ? `<button class="btn" style="border-color:#dc3545;color:#dc3545;" onclick="deletePost('${esc(p.id)}')">删除帖子</button>` : ''}
-        <button class="btn" onclick="document.getElementById('post-editor-modal').remove()">取消</button>${!isNew ? `<button class="btn" onclick="openCommentsPanel('${esc(p.id)}')">评论管理</button>` : ''}
+        <button class="btn" onclick="document.getElementById('post-editor-modal').remove()">取消</button>
+        ${!isNew ? `<button class="btn" onclick="openCommentsPanel('${esc(p.id)}')">评论管理</button>` : ''}
       </div>
     </div>
   `;
+  
+  // 初始化图片数组
   _editorImages = [...(p.images || [])];
   document.body.appendChild(modal);
+
+  // 如果是新建，且已经有了默认角色，自动触发一次阵营匹配
+  if (p.character) {
+    syncPostFaction();
+  }
+}
+
+// ===== 角色改变时自动匹配阵营 =====
+function syncPostFaction() {
+  const charSelect = document.getElementById('pe-character');
+  const factionInput = document.getElementById('pe-faction');
+  
+  if (charSelect && factionInput) {
+    // 获取选中的 option
+    const selectedOption = charSelect.options[charSelect.selectedIndex];
+    
+    // 如果选中的有角色（不是默认的空选项）
+    if (selectedOption && selectedOption.value) {
+      // 读取我们绑在 option 上的 data-faction 属性
+      const autoFaction = selectedOption.getAttribute('data-faction');
+      // 自动填入阵营（如果它是空的，就填中立）
+      factionInput.value = autoFaction || ''; 
+    } else {
+      // 如果选回了“请选择角色”，就清空阵营
+      factionInput.value = '';
+    }
+  }
 }
 
 async function savePost(mode, postType) {
