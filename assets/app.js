@@ -2793,6 +2793,7 @@ async function renderSidebar() {
   // 极简线条 SVG 图标
   const iconHome = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`;
   const iconForum = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`;
+  const iconDiscover = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>`;
   const iconNotice = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`;
   const iconMsg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`;
   const iconMe = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
@@ -2801,6 +2802,7 @@ async function renderSidebar() {
   const links = [
     { href: 'index.html', icon: iconHome, text: '首页' },
     { href: 'forum.html', icon: iconForum, text: '阵营论坛' },
+    { href: 'discover.html', icon: iconDiscover, text: '发现' },
     { href: 'notifications.html', icon: iconNotice, text: '通知', badge: unread },
     { href: 'message.html', icon: iconMsg, text: '私信' },
     { href: 'profile.html', icon: iconMe, text: '我的主页' },
@@ -3917,6 +3919,7 @@ function injectMobileNav() {
   // 极简线条 SVG 图标
   const iconHome = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`;
   const iconForum = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>`;
+  const iconDiscover = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>`;
   const iconNotice = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`;
   const iconMsg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`;
   const iconMe = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
@@ -3924,6 +3927,7 @@ function injectMobileNav() {
   nav.innerHTML = `
     <a href="index.html" class="${path === 'index.html' ? 'active' : ''}"><span class="nav-icon">${iconHome}</span>首页</a>
     <a href="forum.html" class="${path === 'forum.html' ? 'active' : ''}"><span class="nav-icon">${iconForum}</span>论坛</a>
+    <a href="discover.html" class="${path === 'discover.html' ? 'active' : ''}"><span class="nav-icon">${iconDiscover}</span>发现</a>
     <a href="notifications.html" class="${path === 'notifications.html' ? 'active' : ''}"><span class="nav-icon">${iconNotice}</span>通知
       ${unread > 0 ? `<span class="badge" id="mobile-unread-badge" style="display:block;">${unread}</span>` : `<span class="badge" id="mobile-unread-badge" style="display:none;">0</span>`}
     </a>
@@ -4117,3 +4121,68 @@ document.addEventListener('keydown', (e) => {
       break;
   }
 });
+
+async function initDiscover() {
+  await checkUser();
+  await loadData();
+  await loadPostStats();
+  const root = $('#discover-app');
+  if (!root) return;
+
+  // 1. 统计最热标签
+  const tagCounts = {};
+  POSTS.forEach(p => {
+    (p.tags || []).forEach(t => {
+      tagCounts[t] = (tagCounts[t] || 0) + 1;
+    });
+  });
+  const topTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]).slice(0, 6);
+
+  // 2. 取粉丝最多的角色（按基础粉丝+关注数）
+  const topChars = Object.values(CHARACTERS).sort((a,b) => (b.baseFollowers || 0) - (a.baseFollowers || 0)).slice(0, 4);
+
+  // 3. 取点赞和评论最高的帖子
+  const topPosts = [...POSTS].sort((a,b) => {
+    const aStats = POST_STATS[a.id] || { like_count: 0, comment_count: 0 };
+    const bStats = POST_STATS[b.id] || { like_count: 0, comment_count: 0 };
+    const aScore = aStats.like_count + aStats.comment_count * 2;
+    const bScore = bStats.like_count + bStats.comment_count * 2;
+    return bScore - aScore;
+  }).slice(0, 5);
+
+  root.innerHTML = `
+    <div class="card" style="background:var(--primary-light);border-color:var(--primary);">
+      <h3>发现 · 广场</h3>
+      <p style="margin-top:6px;font-size:13px;color:var(--text-muted);">看看大家都在关注什么</p>
+    </div>
+
+    <div class="card">
+      <h3>🏆 热门角色</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:12px;">
+        ${topChars.map(c => `
+          <a href="character.html?handle=${c.handle}" style="text-decoration:none;color:inherit;text-align:center;padding:10px;border-radius:8px;background:var(--bg);">
+            ${avatarHTML(c, 'large')}
+            <div style="font-weight:600;font-size:14px;margin-top:8px;">${esc(c.name)}</div>
+            <div style="font-size:12px;color:var(--muted);">${c.baseFollowers} 粉丝</div>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔥 热门标签</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+        ${topTags.map(([tag, count]) => `
+          <a href="search.html?q=${encodeURIComponent(tag)}" style="text-decoration:none;padding:6px 14px;background:var(--primary-light);color:var(--primary-dark);border-radius:999px;font-size:14px;font-weight:600;">
+            #${esc(tag)} <span style="font-size:12px;font-weight:400;">(${count})</span>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📈 高赞帖子</h3>
+    </div>
+    ${(await Promise.all(topPosts.map(p => renderPostCard(p)))).join('')}
+  `;
+}
