@@ -1368,16 +1368,6 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
     charOptions += `</optgroup>`;
   }
 
-  // 2. 整理地点下拉菜单
-  let locOptions = `<option value="">-- 不填地点 --</option>`;
-  Object.entries(ADMIN_LOCATIONS).forEach(([region, places]) => {
-    locOptions += `<optgroup label="${region}">`;
-    places.forEach(place => {
-      locOptions += `<option value="${place}" ${p.location === place ? 'selected' : ''}>${place}</option>`;
-    });
-    locOptions += `</optgroup>`;
-  });
-
   const modal = document.createElement('div');
   modal.id = 'post-editor-modal';
   modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;overflow-y:auto;padding:20px;box-sizing:border-box;';
@@ -1412,9 +1402,15 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
         <div>
           <label style="font-size:12px;color:var(--muted);">地点</label>
-          <select id="pe-location" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;margin-top:4px;background:#fff;">
-            ${locOptions}
-          </select>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <select id="pe-loc-region" onchange="syncPostLocDetail()" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+              <option value="">-- 选大区 --</option>
+              ${Object.keys(ADMIN_LOCATIONS).map(r => `<option value="${r}" ${p.location && p.location.startsWith(r) ? 'selected' : ''}>${r}</option>`).join('')}
+            </select>
+            <select id="pe-loc-detail" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff;">
+              <!-- 这里由下面的 JS 动态填充 -->
+            </select>
+          </div>
         </div>
         <div>
           <label style="font-size:12px;color:var(--muted);">标签（英文逗号分隔）</label>
@@ -1453,10 +1449,38 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
   _editorImages = [...(p.images || [])];
   document.body.appendChild(modal);
 
+  // 👈 初始化地点二级联动
+  const locRegion = document.getElementById('pe-loc-region');
+  if (locRegion && p.location) {
+    syncPostLocDetail(p.location); // 传入旧地点，用于回显
+  }
+
   // 如果是新建，且已经有了默认角色，自动触发一次阵营匹配
   if (p.character) {
     syncPostFaction();
   }
+}
+
+// 地点二级联动
+function syncPostLocDetail(oldLocation = '') {
+  const regionSel = document.getElementById('pe-loc-region');
+  const detailSel = document.getElementById('pe-loc-detail');
+  if (!regionSel || !detailSel) return;
+  
+  const region = regionSel.value;
+  if (!region) {
+    detailSel.innerHTML = '<option value="">-- 先选大区 --</option>';
+    detailSel.disabled = true;
+    return;
+  }
+  
+  const places = ADMIN_LOCATIONS[region] || [];
+  detailSel.innerHTML = places.map(place => {
+    // 如果旧数据里包含这个地点，就默认选中它
+    const isSelected = oldLocation.includes(place) ? 'selected' : '';
+    return `<option value="${place}" ${isSelected}>${place}</option>`;
+  }).join('');
+  detailSel.disabled = false;
 }
 
 // ===== 角色改变时自动匹配阵营 =====
@@ -1496,7 +1520,15 @@ async function savePost(mode, postType) {
   const id = $id.value.trim();
   const character = $char.value.trim();
   const date = $date ? $date.value.trim() : '';
-  const location = $loc ? $loc.value.trim() : '';
+  const $locRegion = document.querySelector('#pe-loc-region');
+  const $locDetail = document.querySelector('#pe-loc-detail');
+  let location = '';
+  if ($locRegion && $locRegion.value) {
+    location = $locRegion.value;
+    if ($locDetail && $locDetail.value) {
+      location += '·' + $locDetail.value;
+    }
+  }
   const tagsRaw = $tags ? $tags.value.trim() : '';
   const content = $content.value;
   const faction = $faction ? $faction.value.trim() : '';
