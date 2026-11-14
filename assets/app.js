@@ -1067,6 +1067,7 @@ function renderPostCard(post, isDetail = false, showPin = false) {
       ${shouldCollapse ? `<button class="expand-btn" id="expand-btn-${post.id}" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
       
       ${renderPostImages(post.images)}
+      ${post.poll_data ? `<div class="poll-box" id="poll-box-${post.id}"><div class="empty">加载投票中...</div></div>` : ''}
       <div class="post-tags">${tags}</div>
       <div class="post-actions" style="display:flex; align-items:center; gap:24px;">
         <!-- 点赞 -->
@@ -2206,6 +2207,7 @@ async function initHome() {
     `;
   }
 }
+  initAllPolls();
 
 // 渲染一页帖子（被 initHome 和滚动监听调用）
 function renderHomePosts() {
@@ -2451,6 +2453,7 @@ async function initPost() {
   await loadComments(post.id);
   await checkCommentQuota(post.id);
 }
+  initAllPolls();
 
 // 实时字数统计
 function updateCharCount(postId) {
@@ -4319,4 +4322,85 @@ async function initTags() {
   }
 
   root.innerHTML = html;
+}
+
+// ===== 投票功能 =====
+
+// 加载页面上的所有投票
+async function initAllPolls() {
+  const pollBoxes = document.querySelectorAll('.poll-box');
+  for (const box of pollBoxes) {
+    const postId = box.id.replace('poll-box-', '');
+    const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
+    if (post && post.poll_data) {
+      await renderPollUI(postId, post.poll_data.options);
+    }
+  }
+}
+
+// 渲染投票 UI
+async function renderPollUI(postId, options) {
+  const box = document.getElementById(`poll-box-${postId}`);
+  if (!box) return;
+
+  // 1. 查投票记录
+  const { data: votes } = await db.from('post_votes').select('user_id, option_index').eq('post_id', postId);
+  
+  const totalVotes = (votes || []).length;
+  let myVoteIndex = -1;
+  if (currentUser && votes) {
+    const myVote = votes.find(v => v.user_id === currentUser.id);
+    if (myVote) myVoteIndex = myVote.option_index;
+  }
+
+  // 2. 统计每个选项的票数
+  const counts = options.map((_, i) => (votes || []).filter(v => v.option_index === i).length);
+
+  // 3. 渲染 HTML
+  let html = `<div class="poll-title">📊 投票</div>`;
+
+  options.forEach((opt, i) => {
+    const count = counts[i];
+    const percent = totalVotes === 0 ? 0 : Math.round((count / totalVotes) * 100);
+    const isVoted = myVoteIndex !== -1; // 是否已投过票
+    const isMyVote = myVoteIndex === i;
+
+    html += `
+      <div class="poll-option ${isVoted ? 'voted' : ''} ${isMyVote ? 'my-vote' : ''}" 
+           ${!isVoted ? `onclick="submitVote('${postId}', ${i}, ${JSON.stringify(options).replace(/"/g, '&quot;')})"` : ''}>
+        ${isVoted ? `<div class="poll-progress" style="width: ${percent}%;"></div>` : ''}
+        <div class="poll-text">
+          <span>${esc(opt)} ${isMyVote ? '<span class="check">✓</span>' : ''}</span>
+          ${isVoted ? `<span style="font-size:13px; color:var(--text-muted);">${count}票 (${percent}%)</span>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  html += `<div class="poll-total">共 ${totalVotes} 人参与</div>`;
+  box.innerHTML = html;
+}
+
+// 提交投票
+async function submitVote(postId, optionIndex, options) {
+  if (!currentUser) return showToast('请先登录后再投票');
+  
+  // 先检查是否投过（防止手速过快连点）
+  const { data: existing } = await db.from('post_votes').select('id').eq('post_id', postId).eq('user_id', currentUser.id);
+  if (existing && existing.length > 0) {
+    return showToast('你已经投过票了');
+  }
+
+  // 插入投票
+  const { error } = await db.from('post_votes').insert({
+    post_id: postId,
+    user_id: currentUser.id,
+    option_index: optionIndex
+  });
+
+  if (error) return showToast('投票失败：' + error.message);
+
+  showToast('投票成功');
+  // 重新渲染当前帖子的投票框
+  await renderPollUI(postId, options);
 }
