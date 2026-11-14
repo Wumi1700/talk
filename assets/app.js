@@ -177,16 +177,51 @@ function applyFactionTheme() {
 function relativeTime(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return dateStr;
+  if (isNaN(date.getTime())) return dateStr; // 如果解析失败，直接返回原字符串
+
   const now = new Date();
-  const diff = Math.floor((now - date) / 1000);
+  const diff = Math.floor((now - date) / 1000); // 相差秒数
+
+  // 如果时间是未来的（或者系统时间不对导致负数），直接显示原日期
+  if (diff < 0) return dateStr;
+
+  // 1. 1分钟内：刚刚
   if (diff < 60) return '刚刚';
-  if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
-  if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
-  if (diff < 86400 * 7) return Math.floor(diff / 86400) + ' 天前';
-  if (diff < 86400 * 30) return Math.floor(diff / 86400 / 7) + ' 周前';
-  if (diff < 86400 * 365) return Math.floor(diff / 86400 / 30) + ' 个月前';
-  return Math.floor(diff / 86400 / 365) + ' 年前';
+  
+  // 2. 1小时内：X分钟前
+  if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+
+  // 获取“今天 00:00:00”的时间戳
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const targetTime = date.getTime();
+
+  // 3. 今天之内（但超过1小时）：今天 HH:mm
+  if (targetTime >= todayStart) {
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return `今天 ${hh}:${mm}`;
+  }
+
+  // 4. 昨天：昨天 HH:mm
+  const yesterdayStart = todayStart - 86400000;
+  if (targetTime >= yesterdayStart) {
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return `昨天 ${hh}:${mm}`;
+  }
+
+  // 5. 今年内（不显示年份）：MM-DD
+  if (date.getFullYear() === now.getFullYear()) {
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${mm}-${dd}`;
+  }
+
+  // 6. 往年（显示完整）：YYYY-MM-DD
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 // ===== 用户头像 HTML =====
@@ -784,6 +819,7 @@ function normalizePost(p) {
     faction: p.faction || '',
     event: p.event || '',
     archived: p.archived || false
+    isPinned: p.is_pinned || false,
   };
 }
 
@@ -1019,7 +1055,7 @@ function renderPostCard(post, isDetail = false) {
       <div class="post-header">
         ${avatarHTML(char)}
         <div class="post-meta">
-          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}</div>
+          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}${post.isPinned ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">📌 置顶</span>' : ''}</div>
            <div class="post-sub">@${char.handle} · ${post.date || ''}${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
@@ -1639,7 +1675,12 @@ async function renderCharacterTab(tab, char, posts) {
 
   if (tab === 'posts') {
     if (posts.length) {
-      const html = posts.map(p => renderPostCard(p)).join('');
+      const sortedPosts = [...posts].sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return (b.date || '').localeCompare(a.date || '');
+      });
+      const html = sortedPosts.map(p => renderPostCard(p)).join('');
       tabContent.innerHTML = html;
     } else {
       tabContent.innerHTML = '<div class="empty">还没有动态</div>';
