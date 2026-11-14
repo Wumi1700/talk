@@ -1,4 +1,5 @@
 // ===== 初始化 =====
+let currentCharTab = 'main'; // 'main' 代表主要角色，'npc' 代表 NPC
 const SUPABASE_URL = 'https://nsoyywbuqpfhhrezdcly.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zb3l5d2J1cXBmaGhyZXpkY2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MzMyODIsImV4cCI6MjEwNjQwOTI4Mn0.L17d0locmWHjQFykzv9bTjTyLZAk8LDyfSmpxbEnTgg';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -375,39 +376,62 @@ async function renderCharacters() {
 
   if (charsRes.error) { root.innerHTML = '<div class="empty">加载失败：' + esc(charsRes.error.message) + '</div>'; return; }
 
-  const data = charsRes.data;
+  const allChars = charsRes.data || [];
   _allPostsCache = postsRes.data || [];
 
+  // 根据当前 Tab 筛选角色
+  const filteredChars = allChars.filter(c => {
+    if (currentCharTab === 'npc') return !!c.is_npc;
+    return !c.is_npc; // main
+  });
+
   root.innerHTML = `
-    <div class="card" style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
-      <h3 style="margin:0;">角色管理</h3>
-      <button class="btn btn-primary" onclick="openCharacterEditor(null)">+ 新建角色</button>
+    <div class="card" style="padding:12px 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <!-- 切换 Tab -->
+      <div style="display:flex; gap:10px;">
+        <button class="btn ${currentCharTab === 'main' ? 'btn-primary' : ''}" onclick="switchCharTab('main')" style="padding:6px 16px; border-radius:20px;">👑 主要角色</button>
+        <button class="btn ${currentCharTab === 'npc' ? 'btn-primary' : ''}" onclick="switchCharTab('npc')" style="padding:6px 16px; border-radius:20px;">🤖 NPC角色</button>
+      </div>
+      <!-- 新建按钮 -->
+      <button class="btn" onclick="openCharacterEditor(null)" style="background:var(--text); color:#fff; border:none;">+ 新建角色</button>
     </div>
-    ${(data || []).length === 0 ? '<div class="card"><div class="empty">还没有角色</div></div>' :
-      (data || []).map(c => {
-        const initial = (c.name || '?').slice(0, 1);
-        const fac = c.faction ? factionIcon(c.faction) + ' ' + c.faction : '中立';
-        return `
-          <div class="card" style="display:flex;align-items:center;gap:12px;">
-            ${c.avatar
-              ? `<img src="${esc(c.avatar)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
-              : `<div style="width:44px;height:44px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc(initial)}</div>`}
-            <div style="flex:1;min-width:0;">
-              <div style="font-weight:600;font-size:14px;">
-                ${esc(c.name)}
-                ${c.verified ? `<span class="verified">✓ ${esc(c.verified)}</span>` : ''}
-                ${c.is_npc ? '<span style="font-size:11px;background:var(--primary-light);color:var(--primary-dark);padding:1px 6px;border-radius:10px;margin-left:6px;">NPC</span>' : ''}
+
+    <div id="char-list-container">
+      ${filteredChars.length === 0 
+        ? `<div class="card"><div class="empty">还没有${currentCharTab === 'npc' ? 'NPC' : '主要'}角色</div></div>` 
+        : filteredChars.map(c => {
+          const initial = (c.name || '?').slice(0, 1);
+          const fac = c.faction ? factionIcon(c.faction) + ' ' + c.faction : '中立';
+          return `
+            <div class="card" style="display:flex;align-items:center;gap:12px;">
+              ${c.avatar
+                ? `<img src="${esc(c.avatar)}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex-shrink:0;">`
+                : `<div style="width:44px;height:44px;border-radius:50%;background:var(--primary-light);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${esc(initial)}</div>`}
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:600;font-size:14px;">
+                  ${esc(c.name)}
+                  ${c.verified ? `<span class="verified">✓ ${esc(c.verified)}</span>` : ''}
+                  ${c.is_npc ? '<span style="font-size:11px;background:#e0e0e0;color:#666;padding:1px 6px;border-radius:10px;margin-left:6px;">NPC</span>' : ''}
+                </div>
+                <div style="font-size:12px;color:var(--muted);margin-top:2px;">@${esc(c.handle)} · ${fac} · ${c.base_followers || 0} 粉丝</div>
               </div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px;">@${esc(c.handle)} · ${fac} · ${c.base_followers || 0} 粉丝</div>
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button class="btn" style="font-size:12px;padding:4px 10px;" onclick='openCharacterEditor(${JSON.stringify(JSON.stringify(c))})'>编辑</button>
+                <button class="btn" style="font-size:12px;padding:4px 10px;border-color:#dc3545;color:#dc3545;" onclick="deleteCharacter('${esc(c.handle)}')">删除</button>
+              </div>
             </div>
-            <div style="display:flex;gap:6px;flex-shrink:0;">
-              <button class="btn" style="font-size:12px;padding:4px 10px;" onclick='openCharacterEditor(${JSON.stringify(JSON.stringify(c))})'>编辑</button>
-              <button class="btn" style="font-size:12px;padding:4px 10px;border-color:#dc3545;color:#dc3545;" onclick="deleteCharacter('${esc(c.handle)}')">删除</button>
-            </div>
-          </div>
-        `;
-      }).join('')}
+          `;
+        }).join('')
+      }
+    </div>
   `;
+}
+
+// 切换角色分类 Tab
+function switchCharTab(tab) {
+  if (currentCharTab === tab) return;
+  currentCharTab = tab;
+  renderCharacters();
 }
 
 function openCharacterEditor(jsonStr) {
