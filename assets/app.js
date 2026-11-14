@@ -4122,6 +4122,9 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+function esc(str) {
+  return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 async function initDiscover() {
   await checkUser();
   await loadData();
