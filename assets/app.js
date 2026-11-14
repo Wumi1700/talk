@@ -3321,15 +3321,78 @@ async function initForum() {
 // ===== 16. 顶部搜索框 =====
 function bindSearchBox() {
   const inputs = document.querySelectorAll('.search-box input');
+  
+  // 获取历史记录的方法
+  const getHistory = () => JSON.parse(localStorage.getItem('talk_search_history') || '[]');
+  
   inputs.forEach(input => {
+    // 1. 绑定回车搜索
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const q = input.value.trim();
         if (!q) return;
+        
+        // 存入历史记录
+        let history = getHistory();
+        history = history.filter(item => item !== q); // 去重
+        history.unshift(q); // 放到最前面
+        history = history.slice(0, 10); // 最多保留10条
+        localStorage.setItem('talk_search_history', JSON.stringify(history));
+        
         location.href = 'search.html?q=' + encodeURIComponent(q);
       }
     });
+
+    // 2. 聚焦时显示历史面板
+    input.addEventListener('focus', () => {
+      const history = getHistory();
+      if (history.length === 0) return; // 没历史就不弹
+
+      // 清理旧面板
+      let panel = document.getElementById('search-history-panel');
+      if (panel) panel.remove();
+
+      panel = document.createElement('div');
+      panel.id = 'search-history-panel';
+      panel.className = 'search-history-panel';
+      panel.innerHTML = `
+        <div class="search-history-header">
+          <span>搜索历史</span>
+          <span onclick="clearSearchHistory()">🗑️ 清空</span>
+        </div>
+        ${history.map(h => `<div class="search-history-item" onclick="jumpSearch('${h.replace(/'/g, "\\'")}')">🔍 ${h}</div>`).join('')}
+      `;
+      
+      document.body.appendChild(panel);
+      
+      // 计算位置，死死贴在输入框下面
+      const rect = input.getBoundingClientRect();
+      panel.style.left = rect.left + 'px';
+      panel.style.top = (rect.bottom + 8) + 'px';
+      panel.style.width = Math.max(rect.width, 200) + 'px';
+      panel.style.display = 'block';
+    });
   });
+
+  // 3. 点击页面其他地方隐藏面板
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('search-history-panel');
+    if (panel && !e.target.closest('.search-box') && !e.target.closest('#search-history-panel')) {
+      panel.style.display = 'none';
+    }
+  });
+}
+
+// 点击历史记录跳转
+function jumpSearch(keyword) {
+  location.href = 'search.html?q=' + encodeURIComponent(keyword);
+}
+
+// 清空历史
+function clearSearchHistory() {
+  localStorage.removeItem('talk_search_history');
+  const panel = document.getElementById('search-history-panel');
+  if (panel) panel.style.display = 'none';
 }
 
 // ===== 17. 搜索页 =====
