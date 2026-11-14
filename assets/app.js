@@ -818,8 +818,8 @@ function normalizePost(p) {
     postType: p.post_type || 'main',
     faction: p.faction || '',
     event: p.event || '',
-    archived: p.archived || false
-    isPinned: p.is_pinned || false,
+    archived: p.archived || false,
+    isPinned: p.is_pinned || false
   };
 }
 
