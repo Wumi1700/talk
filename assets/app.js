@@ -1036,7 +1036,7 @@ function openImageViewer(images, startIndex = 0) {
   };
 }
 
-function renderPostCard(post, isDetail = false) {
+function renderPostCard(post, isDetail = false, showPin = false) {
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
   const tags = (post.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
@@ -1055,7 +1055,7 @@ function renderPostCard(post, isDetail = false) {
       <div class="post-header">
         ${avatarHTML(char)}
         <div class="post-meta">
-          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}${post.isPinned ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">📌 置顶</span>' : ''}</div>
+          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}${(showPin && post.isPinned) ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">📌 置顶</span>' : ''}</div>
            <div class="post-sub">@${char.handle} · ${post.date || ''}${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
@@ -1675,12 +1675,15 @@ async function renderCharacterTab(tab, char, posts) {
 
   if (tab === 'posts') {
     if (posts.length) {
+      // 1. 排序：置顶优先，其次按日期倒序
       const sortedPosts = [...posts].sort((a, b) => {
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
         return (b.date || '').localeCompare(a.date || '');
       });
-      const html = sortedPosts.map(p => renderPostCard(p)).join('');
+      
+      // 2. 👈 关键修改：传入 true 开启置顶标签的显示
+      const html = sortedPosts.map(p => renderPostCard(p, false, true)).join('');
       tabContent.innerHTML = html;
     } else {
       tabContent.innerHTML = '<div class="empty">还没有动态</div>';
@@ -1705,13 +1708,14 @@ async function renderCharacterTab(tab, char, posts) {
     const likeIds = char.likes || [];
     const likedPosts = POSTS.filter(p => likeIds.includes(p.id));
     if (!likedPosts.length) return tabContent.innerHTML = '<div class="empty">还没有点赞过帖子</div>';
-    tabContent.innerHTML = likedPosts.map(p => renderPostCard(p)).join('');
+    // 这里的点赞列表，你如果想显示置顶标签，也可以传入 true，暂时按原样 false 处理
+    tabContent.innerHTML = likedPosts.map(p => renderPostCard(p, false, false)).join('');
   } else if (tab === 'bookmarks') {
     if (!privacy.bookmarks) return tabContent.innerHTML = '<div class="empty">该角色未公开收藏列表</div>';
     const bkIds = char.bookmarks || [];
     const bkPosts = POSTS.filter(p => bkIds.includes(p.id));
     if (!bkPosts.length) return tabContent.innerHTML = '<div class="empty">还没有收藏过帖子</div>';
-    tabContent.innerHTML = bkPosts.map(p => renderPostCard(p)).join('');
+    tabContent.innerHTML = bkPosts.map(p => renderPostCard(p, false, false)).join('');
   }
 }
 
