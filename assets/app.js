@@ -3399,6 +3399,12 @@ function escapeText(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+
+// ===== 17. 搜索页 =====
+function escapeText(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 async function initSearch() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
