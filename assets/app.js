@@ -2020,7 +2020,6 @@ async function initProfile() {
 
 // ===== 11. 页面入口 =====
 // 全局变量，用于分页控制
-let homeCurrentPage = 0;
 let homeDisplayPosts = [];
 const POSTS_PER_PAGE = 10;
 let homeMobileHotsearchHTML = '';
