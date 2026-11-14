@@ -2095,11 +2095,17 @@ async function initProfile() {
 }
 
 // ===== 11. 页面入口 =====
+// 全局变量，用于分页控制
+let homeCurrentPage = 0;
+let homeDisplayPosts = [];
+const POSTS_PER_PAGE = 10;
+let homeMobileHotsearchHTML = '';
+
 async function initHome() {
   forumReadOnly = false;
 
   const feed = $('#feed');
-  if (feed && (feed.innerHTML === '' || feed.innerHTML.includes('加载中'))) {
+  if (feed) {
     let skeletonHTML = '';
     for (let i = 0; i < 3; i++) {
       skeletonHTML += `
@@ -2125,14 +2131,14 @@ async function initHome() {
   await loadHotsearch();
 
   const isMobile = window.innerWidth <= 768;
-  const mobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
+  homeMobileHotsearchHTML = isMobile ? renderHotsearchCard() : '';
 
   let displayPosts = [...POSTS];
 
   // 检查是否有关注过滤
   if (currentHomeTab === 'following') {
     if (!currentUser) {
-      feed.innerHTML = mobileHotsearchHTML + `<div class="empty" style="padding:40px 20px;">登录后查看你关注的动态<br><br><button class="btn btn-primary" onclick="openAuthModal()">去登录</button></div>`;
+      feed.innerHTML = homeMobileHotsearchHTML + `<div class="empty" style="padding:40px 20px;">登录后查看你关注的动态<br><br><button class="btn btn-primary" onclick="openAuthModal()">去登录</button></div>`;
       return;
     }
     const { data: follows } = await db.from('follows').select('character_id').eq('user_id', currentUser.id);
@@ -2140,7 +2146,7 @@ async function initHome() {
     displayPosts = POSTS.filter(p => followedChars.includes(p.character));
     
     if (!displayPosts.length) {
-      feed.innerHTML = mobileHotsearchHTML + '<div class="empty" style="padding:40px;">你关注的角色还没有发动态哦~</div>';
+      feed.innerHTML = homeMobileHotsearchHTML + '<div class="empty" style="padding:40px;">你关注的角色还没有发动态哦~</div>';
       return;
     }
   } else {
@@ -2157,19 +2163,18 @@ async function initHome() {
     });
   }
 
-  if (!displayPosts.length) {
-    feed.innerHTML = mobileHotsearchHTML + '<div class="empty">还没有动态</div>';
+  // 初始化分页数据
+  homeDisplayPosts = displayPosts;
+  homeCurrentPage = 0;
+
+  if (!homeDisplayPosts.length) {
+    feed.innerHTML = homeMobileHotsearchHTML + '<div class="empty">还没有动态</div>';
   } else {
-    const parts = [];
-    for (let i = 0; i < displayPosts.length; i++) {
-      parts.push(renderPostCard(displayPosts[i]));
-      if ((i + 1) % 3 === 0) {
-        parts.push(renderAdCard());
-      }
-    }
-    feed.innerHTML = mobileHotsearchHTML + parts.join('');
+    feed.innerHTML = homeMobileHotsearchHTML;
+    renderHomePosts(); // 渲染第一页
   }
 
+  // 更新手机端 Tab 激活状态
   if (isMobile) {
     const tabRec = document.getElementById('tab-recommend');
     const tabFol = document.getElementById('tab-following');
@@ -2179,13 +2184,14 @@ async function initHome() {
     }
   }
 
+  // 渲染右侧栏
   const sidebarRight = document.querySelector('.sidebar-right');
   if (sidebarRight) {
     sidebarRight.innerHTML = `
       ${renderHotsearchCard()}
       <div class="card">
         <h3>推荐角色</h3>
-        <div id="recommend" class="recommend-scroll-box">
+        <div id="recommend">
           ${Object.values(CHARACTERS).map(c => `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
               ${avatarHTML(c)}
@@ -2200,6 +2206,59 @@ async function initHome() {
     `;
   }
 }
+
+// 渲染一页帖子（被 initHome 和滚动监听调用）
+function renderHomePosts() {
+  const feed = $('#feed');
+  if (!feed) return;
+
+  const start = homeCurrentPage * POSTS_PER_PAGE;
+  const end = start + POSTS_PER_PAGE;
+  const pagePosts = homeDisplayPosts.slice(start, end);
+
+  if (pagePosts.length === 0) return;
+
+  const parts = [];
+  for (let i = 0; i < pagePosts.length; i++) {
+    const globalIndex = start + i;
+    parts.push(renderPostCard(pagePosts[i]));
+    if ((globalIndex + 1) % 3 === 0) {
+      parts.push(renderAdCard());
+    }
+  }
+
+  // 移除旧的底部加载提示
+  const oldLoader = document.getElementById('home-loader');
+  if (oldLoader) oldLoader.remove();
+
+  feed.insertAdjacentHTML('beforeend', parts.join(''));
+  homeCurrentPage++;
+
+  // 如果还有更多，把加载提示塞到最底下
+  if (end < homeDisplayPosts.length) {
+    feed.insertAdjacentHTML('beforeend', `
+      <div id="home-loader" style="text-align: center; padding: 30px; color: var(--muted); font-size: 13px;">
+        <div style="display:inline-block; width:24px; height:24px; border:3px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation: spin 1s linear infinite;"></div>
+        <div style="margin-top:10px;">上滑加载更多...</div>
+      </div>
+      <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+    `);
+  }
+}
+
+// 监听网页滚动，触底自动加载
+window.addEventListener('scroll', () => {
+  const path = location.pathname;
+  const isHome = path.endsWith('index.html') || path.endsWith('/') || path.endsWith('/talk/');
+  if (!isHome) return;
+
+  // 距离底部 300px 的时候，自动触发加载
+  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) {
+    if (homeCurrentPage * POSTS_PER_PAGE < homeDisplayPosts.length) {
+      renderHomePosts();
+    }
+  }
+});
 
 // 切换推荐/关注
 function switchHomeTab(tab) {
