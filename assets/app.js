@@ -1038,7 +1038,7 @@ function openImageViewer(images, startIndex = 0) {
 
 function renderPostCard(post, isDetail = false, showPin = false) {
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
-  const tags = (post.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
+  const tags = (post.tags || []).map(t => `<a href="tags.html?tag=${encodeURIComponent(t)}" class="tag">#${t}</a>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
   let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
@@ -4220,4 +4220,44 @@ async function initDiscover() {
     </div>
     ${(await Promise.all(topPosts.map(p => renderPostCard(p)))).join('')}
   `;
+}
+
+// ===== 标签聚合页 =====
+async function initTags() {
+  await checkUser();
+  await loadData();
+  await loadPostStats();
+  await loadForumData(); // 以防包含论坛帖子
+
+  const root = $('#tags-app');
+  const tag = new URLSearchParams(location.search).get('tag');
+
+  if (!tag) {
+    root.innerHTML = '<div class="empty">没有指定标签</div>';
+    return;
+  }
+
+  // 合并主页和论坛帖子，寻找包含该标签的
+  const allPosts = [...POSTS, ...FORUM_POSTS];
+  const matchedPosts = allPosts.filter(p => (p.tags || []).includes(tag));
+
+  // 按日期排序
+  matchedPosts.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  let html = `
+    <div class="card">
+      <h3>标签：#${tag}</h3>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px;">
+        共找到 ${matchedPosts.length} 篇帖子
+      </div>
+    </div>
+  `;
+
+  if (matchedPosts.length) {
+    html += matchedPosts.map(p => renderPostCard(p)).join('');
+  } else {
+    html += '<div class="empty">还没有关于这个标签的帖子</div>';
+  }
+
+  root.innerHTML = html;
 }
