@@ -1378,6 +1378,8 @@ function addImageToEditor(url) {
   if (el) el.innerHTML = renderImageList(_editorImages);
 }
 
+
+
 // ===== 帖子编辑器 =====
 async function openPostEditor(postId, characterHandle, postType, defaultFaction) {
   let post = null;
@@ -1401,6 +1403,7 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
     content: '',
     post_type: postType || 'main',
     faction: defaultFaction || '',
+    poll_data: post ? post.poll_data : null 
   };
 
   const modal = document.createElement('div');
@@ -1475,6 +1478,28 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
         </div>
       ` : ''}
 
+      <!-- 👈 新增：附加功能区域 -->
+      <div style="margin-bottom:16px; padding:12px; background:#f9f9f9; border-radius:8px; border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+          <label style="font-size:13px; font-weight:600;">帖子附加功能：</label>
+          <select id="pe-post-feature" onchange="togglePollOptions()" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:#fff;">
+            <option value="normal" ${!p.poll_data ? 'selected' : ''}>普通帖子</option>
+            <option value="poll" ${p.poll_data ? 'selected' : ''}>发起投票</option>
+          </select>
+        </div>
+
+        <!-- 投票选项容器（默认隐藏） -->
+        <div id="pe-poll-container" style="display:${p.poll_data ? 'block' : 'none'};">
+          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">填写投票选项（至少2个，最多4个，留空则不显示该选项）：</div>
+          <div style="display:grid; gap:8px;">
+            <input id="pe-poll-opt0" type="text" value="${p.poll_data && p.poll_data.options[0] ? esc(p.poll_data.options[0]) : ''}" placeholder="选项 A" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-poll-opt1" type="text" value="${p.poll_data && p.poll_data.options[1] ? esc(p.poll_data.options[1]) : ''}" placeholder="选项 B" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-poll-opt2" type="text" value="${p.poll_data && p.poll_data.options[2] ? esc(p.poll_data.options[2]) : ''}" placeholder="选项 C（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-poll-opt3" type="text" value="${p.poll_data && p.poll_data.options[3] ? esc(p.poll_data.options[3]) : ''}" placeholder="选项 D（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+          </div>
+        </div>
+      </div>
+
       <div style="margin-bottom:16px;">
         <label style="font-size:12px;color:var(--muted);">正文（Markdown）</label>
         <textarea id="pe-content" rows="10" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:4px;font-family:monospace;font-size:13px;resize:vertical;">${esc(p.content)}</textarea>
@@ -1510,6 +1535,15 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
   // 如果是新建，且已经有了默认角色，自动触发一次阵营匹配
   if (p.character) {
     syncPostFaction();
+  }
+}
+
+// 切换投票选项的显示
+function togglePollOptions() {
+  const feature = document.getElementById('pe-post-feature').value;
+  const container = document.getElementById('pe-poll-container');
+  if (container) {
+    container.style.display = feature === 'poll' ? 'block' : 'none';
   }
 }
 
@@ -1620,6 +1654,19 @@ async function savePost(mode, postType) {
   const tags = tagsRaw ? tagsRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
   const images = [..._editorImages];
 
+  // 👈 收集投票数据
+  const feature = document.getElementById('pe-post-feature').value;
+  let pollData = null;
+  if (feature === 'poll') {
+    const opts = [];
+    for (let i = 0; i < 4; i++) {
+      const val = document.getElementById(`pe-poll-opt${i}`).value.trim();
+      if (val) opts.push(val);
+    }
+    if (opts.length < 2) return showToast('投票必须至少填写 2 个选项');
+    pollData = { options: opts };
+  }
+
   const payload = {
     id,
     character,
@@ -1632,6 +1679,7 @@ async function savePost(mode, postType) {
     faction,
     event,
     is_pinned: document.querySelector('#pe-is-pinned') ? document.querySelector('#pe-is-pinned').checked : false,
+    poll_data: pollData
   };
 
   let err;
