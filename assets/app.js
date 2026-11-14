@@ -3325,17 +3325,16 @@ function bindSearchBox() {
   const inputs = document.querySelectorAll('.search-box input');
   const getHistory = () => JSON.parse(localStorage.getItem('talk_search_history') || '[]');
   const getTrending = () => {
-    // 把热搜里现有的文字拿出来作为“其他人常搜”
     if (typeof HOTSEARCH !== 'undefined' && HOTSEARCH.byFaction) {
       const allHot = [];
       Object.values(HOTSEARCH.byFaction).forEach(arr => arr.forEach(item => allHot.push(item.text)));
-      return [...new Set(allHot)].slice(0, 3); // 取前3个
+      return [...new Set(allHot)].slice(0, 3);
     }
     return ['日常', '公告', '王都'];
   };
 
   inputs.forEach(input => {
-    // 回车搜索并记录历史
+    // 回车搜索并记录
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const q = input.value.trim();
@@ -3355,28 +3354,41 @@ function bindSearchBox() {
 
       const history = getHistory();
       const trending = getTrending();
+      if (history.length === 0 && trending.length === 0) return;
 
       panel = document.createElement('div');
       panel.id = 'search-panel-modal';
       panel.className = 'search-panel';
       
-      let html = '';
+      // 👈 核心：渲染历史记录的逻辑（带折叠）
+      let historyHTML = '';
       if (history.length > 0) {
-        html += `<div class="search-panel-header"><span>搜索历史</span><span class="clear-btn" onclick="localStorage.removeItem('talk_search_history'); document.getElementById('search-panel-modal').style.display='none';">清空</span></div>`;
-        html += history.map(h => `<div class="search-panel-item" onclick="location.href='search.html?q=${encodeURIComponent(h)}'">🕒 ${h}</div>`).join('');
+        historyHTML += `<div class="search-panel-header"><span>搜索历史</span><span class="clear-btn" onclick="localStorage.removeItem('talk_search_history'); document.getElementById('search-panel-modal').style.display='none';">清空</span></div>`;
+        
+        // 默认只显示前 3 条
+        const displayList = history.slice(0, 3);
+        historyHTML += displayList.map(h => `<div class="search-panel-item" onclick="location.href='search.html?q=${encodeURIComponent(h)}'">🕒 ${h}</div>`).join('');
+        
+        // 如果超过3条，把剩下的藏进一个隐藏的 div，并加一个展开按钮
+        if (history.length > 3) {
+          const hiddenList = history.slice(3);
+          historyHTML += `<div id="hidden-history-items" style="display:none;">`;
+          historyHTML += hiddenList.map(h => `<div class="search-panel-item" onclick="location.href='search.html?q=${encodeURIComponent(h)}'">🕒 ${h}</div>`).join('');
+          historyHTML += `</div>`;
+          historyHTML += `<div class="search-panel-item" id="history-toggle-btn" style="color:var(--primary-dark); font-size:12px; cursor:pointer;" onclick="toggleSearchHistory(this, ${hiddenList.length})">⌄ 展开更多 (还有 ${hiddenList.length} 条)</div>`;
+        }
       }
-      
+
+      // 渲染“其他人常搜”
+      let trendingHTML = '';
       if (trending.length > 0) {
-        html += `<div class="search-panel-header" style="margin-top:12px;"><span>其他人常搜</span></div>`;
-        html += trending.map(t => `<div class="search-panel-item" onclick="location.href='search.html?q=${encodeURIComponent(t)}'">🔥 ${t}</div>`).join('');
+        trendingHTML += `<div class="search-panel-header" style="margin-top:10px;"><span>其他人常搜</span></div>`;
+        trendingHTML += trending.map(t => `<div class="search-panel-item" onclick="location.href='search.html?q=${encodeURIComponent(t)}'">🔥 ${t}</div>`).join('');
       }
 
-      panel.innerHTML = html;
-      
-      // 如果没历史也没常搜，就不弹了
-      if (!html) return;
-
+      panel.innerHTML = historyHTML + trendingHTML;
       document.body.appendChild(panel);
+      
       const rect = input.getBoundingClientRect();
       panel.style.left = rect.left + 'px';
       panel.style.top = (rect.bottom + 8) + 'px';
@@ -3392,6 +3404,20 @@ function bindSearchBox() {
       panel.style.display = 'none';
     }
   });
+}
+
+// 展开/收起搜索历史
+function toggleSearchHistory(btn, hiddenCount) {
+  const hiddenDiv = document.getElementById('hidden-history-items');
+  if (!hiddenDiv) return;
+  
+  if (hiddenDiv.style.display === 'none') {
+    hiddenDiv.style.display = 'block';
+    btn.innerHTML = '⌃ 收起';
+  } else {
+    hiddenDiv.style.display = 'none';
+    btn.innerHTML = `⌄ 展开更多 (还有 ${hiddenCount} 条)`;
+  }
 }
 
 // ===== 17. 搜索页 =====
