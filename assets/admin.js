@@ -811,7 +811,7 @@ async function renderMainPosts() {
   body.innerHTML = '<div class="empty" style="padding:40px;text-align:center;">加载中…</div>';
 
   const { data: posts, error } = await db.from('posts')
-    .select('id, character, date, content, faction, post_type')
+    .select('id, character, date, content, faction, post_type, is_pinned')
     .eq('post_type', 'main')
     .order('date', { ascending: false });
 
@@ -869,10 +869,10 @@ function renderMainPostsList(grouped, allChars) {
           ? '<div style="font-size:13px;color:var(--muted);padding:8px 0;">还没有帖子</div>'
           : list.map(p => `
             <div style="padding:10px;border-radius:8px;background:var(--bg);margin-bottom:6px;cursor:pointer;" onclick="openPostEditor('${p.id}', '', 'main')">
-            <div style="font-size:13px;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
-              <span>${esc(p.date || '')} ${p.is_pinned ? '<span style="color:#E76F51;font-weight:bold;">[置顶]</span>' : ''}</span>
-              <button class="btn" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation(); adminTogglePinPost('${p.id}', ${p.is_pinned || false})">${p.is_pinned ? '取消置顶' : '置顶'}</button>
-            </div>
+              <div style="font-size:13px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+                <span>${esc(p.date || '')} ${p.is_pinned ? '<span style="color:#E76F51;font-weight:bold;margin-left:6px;">[置顶]</span>' : ''}</span>
+                <button class="btn" style="padding:2px 8px;font-size:11px;" onclick="event.stopPropagation(); adminTogglePinPost('${p.id}', ${p.is_pinned || false})">${p.is_pinned ? '取消置顶' : '置顶'}</button>
+              </div>
               <div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(p.content.slice(0, 100))}</div>
             </div>
           `).join('')}
