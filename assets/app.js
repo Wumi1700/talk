@@ -3321,78 +3321,75 @@ async function initForum() {
 // ===== 16. 顶部搜索框 =====
 function bindSearchBox() {
   const inputs = document.querySelectorAll('.search-box input');
-  
-  // 获取历史记录的方法
   const getHistory = () => JSON.parse(localStorage.getItem('talk_search_history') || '[]');
-  
+  const getTrending = () => {
+    // 把热搜里现有的文字拿出来作为“其他人常搜”
+    if (typeof HOTSEARCH !== 'undefined' && HOTSEARCH.byFaction) {
+      const allHot = [];
+      Object.values(HOTSEARCH.byFaction).forEach(arr => arr.forEach(item => allHot.push(item.text)));
+      return [...new Set(allHot)].slice(0, 3); // 取前3个
+    }
+    return ['日常', '公告', '王都'];
+  };
+
   inputs.forEach(input => {
-    // 1. 绑定回车搜索
+    // 回车搜索并记录历史
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const q = input.value.trim();
         if (!q) return;
-        
-        // 存入历史记录
         let history = getHistory();
-        history = history.filter(item => item !== q); // 去重
-        history.unshift(q); // 放到最前面
-        history = history.slice(0, 10); // 最多保留10条
-        localStorage.setItem('talk_search_history', JSON.stringify(history));
-        
+        history = history.filter(item => item !== q);
+        history.unshift(q);
+        localStorage.setItem('talk_search_history', JSON.stringify(history.slice(0, 10)));
         location.href = 'search.html?q=' + encodeURIComponent(q);
       }
     });
 
-    // 2. 聚焦时显示历史面板
+    // 聚焦显示面板
     input.addEventListener('focus', () => {
-      const history = getHistory();
-      if (history.length === 0) return; // 没历史就不弹
-
-      // 清理旧面板
-      let panel = document.getElementById('search-history-panel');
+      let panel = document.getElementById('search-panel-modal');
       if (panel) panel.remove();
 
+      const history = getHistory();
+      const trending = getTrending();
+
       panel = document.createElement('div');
-      panel.id = 'search-history-panel';
-      panel.className = 'search-history-panel';
-      panel.innerHTML = `
-        <div class="search-history-header">
-          <span>搜索历史</span>
-          <span onclick="clearSearchHistory()">🗑️ 清空</span>
-        </div>
-        ${history.map(h => `<div class="search-history-item" onclick="jumpSearch('${h.replace(/'/g, "\\'")}')">🔍 ${h}</div>`).join('')}
-      `;
+      panel.id = 'search-panel-modal';
+      panel.className = 'search-panel';
       
+      let html = '';
+      if (history.length > 0) {
+        html += `<div class="search-panel-header"><span>搜索历史</span><span class="clear-btn" onclick="localStorage.removeItem('talk_search_history'); document.getElementById('search-panel-modal').style.display='none';">清空</span></div>`;
+        html += history.map(h => `<div class="search-panel-item" onclick="location.href='search.html?q=${encodeURIComponent(h)}'">🕒 ${h}</div>`).join('');
+      }
+      
+      if (trending.length > 0) {
+        html += `<div class="search-panel-header" style="margin-top:12px;"><span>其他人常搜</span></div>`;
+        html += trending.map(t => `<div class="search-panel-item" onclick="location.href='search.html?q=${encodeURIComponent(t)}'">🔥 ${t}</div>`).join('');
+      }
+
+      panel.innerHTML = html;
+      
+      // 如果没历史也没常搜，就不弹了
+      if (!html) return;
+
       document.body.appendChild(panel);
-      
-      // 计算位置，死死贴在输入框下面
       const rect = input.getBoundingClientRect();
       panel.style.left = rect.left + 'px';
       panel.style.top = (rect.bottom + 8) + 'px';
-      panel.style.width = Math.max(rect.width, 200) + 'px';
+      panel.style.width = Math.max(rect.width, 240) + 'px';
       panel.style.display = 'block';
     });
   });
 
-  // 3. 点击页面其他地方隐藏面板
+  // 点击外部关闭面板
   document.addEventListener('click', (e) => {
-    const panel = document.getElementById('search-history-panel');
-    if (panel && !e.target.closest('.search-box') && !e.target.closest('#search-history-panel')) {
+    const panel = document.getElementById('search-panel-modal');
+    if (panel && !e.target.closest('.search-box') && !e.target.closest('#search-panel-modal')) {
       panel.style.display = 'none';
     }
   });
-}
-
-// 点击历史记录跳转
-function jumpSearch(keyword) {
-  location.href = 'search.html?q=' + encodeURIComponent(keyword);
-}
-
-// 清空历史
-function clearSearchHistory() {
-  localStorage.removeItem('talk_search_history');
-  const panel = document.getElementById('search-history-panel');
-  if (panel) panel.style.display = 'none';
 }
 
 // ===== 17. 搜索页 =====
@@ -3883,6 +3880,17 @@ async function initUserProfileView() {
 
 // ===== 自动注入加载提示 =====
 document.addEventListener('DOMContentLoaded', () => {
+    // 极简 SVG 搜索图标
+  const searchSVG = `<svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+
+  // 替换电脑端/手机端顶栏中文本为 🔍 的链接
+  document.querySelectorAll('a').forEach(a => {
+    if (a.innerHTML.trim() === '🔍') {
+      a.innerHTML = searchSVG;
+      a.style.display = 'inline-flex';
+      a.style.alignItems = 'center';
+    }
+  });
   const mainEl = document.querySelector('main');
   if (mainEl) {
     const text = mainEl.textContent.trim();
