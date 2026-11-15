@@ -1483,9 +1483,10 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
           <label style="font-size:13px; font-weight:600;">帖子附加功能：</label>
           <select id="pe-post-feature" onchange="togglePostFeatures()" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:#fff;">
-            <option value="normal" ${!p.poll_data && !p.is_riddle && !p.whisper_faction ? 'selected' : ''}>普通帖子</option>
+            <option value="normal" ${!p.poll_data && !p.riddle_data && !p.whisper_faction ? 'selected' : ''}>普通帖子</option>
             <option value="poll" ${p.poll_data ? 'selected' : ''}>发起投票</option>
-            <option value="riddle" ${p.is_riddle ? 'selected' : ''}>盲盒解密</option>
+            <option value="riddle_click" ${p.riddle_data && p.riddle_data.type === 'click' ? 'selected' : ''}>盲盒解密（点击型）</option>
+            <option value="riddle_quiz" ${p.riddle_data && p.riddle_data.type === 'quiz' ? 'selected' : ''}>盲盒解密（答题型）</option>
             <option value="whisper" ${p.whisper_faction ? 'selected' : ''}>悄悄话（限阵营）</option>
           </select>
         </div>
@@ -1504,17 +1505,26 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
           </select>
         </div>
 
-        <!-- 投票选项容器（默认隐藏） -->
-        <div id="pe-poll-container" style="display:${p.poll_data ? 'block' : 'none'};">
-          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">填写投票选项（至少2个，最多4个，留空则不显示该选项）：</div>
-          <div style="display:grid; gap:8px;">
-            <input id="pe-poll-opt0" type="text" value="${p.poll_data && p.poll_data.options[0] ? esc(p.poll_data.options[0]) : ''}" placeholder="选项 A" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
-            <input id="pe-poll-opt1" type="text" value="${p.poll_data && p.poll_data.options[1] ? esc(p.poll_data.options[1]) : ''}" placeholder="选项 B" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
-            <input id="pe-poll-opt2" type="text" value="${p.poll_data && p.poll_data.options[2] ? esc(p.poll_data.options[2]) : ''}" placeholder="选项 C（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
-            <input id="pe-poll-opt3" type="text" value="${p.poll_data && p.poll_data.options[3] ? esc(p.poll_data.options[3]) : ''}" placeholder="选项 D（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+        <!-- 答题选项容器 -->
+        <div id="pe-quiz-container" style="display:${p.riddle_data && p.riddle_data.type === 'quiz' ? 'block' : 'none'}; margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:8px; background:#fff;">
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">设置解密题目</div>
+          <input id="pe-quiz-q" type="text" value="${p.riddle_data && p.riddle_data.question ? esc(p.riddle_data.question) : ''}" placeholder="输入题目，如：红叶镇唯一的旅店叫什么？" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <input id="pe-quiz-opt0" type="text" value="${p.riddle_data && p.riddle_data.options[0] ? esc(p.riddle_data.options[0]) : ''}" placeholder="选项 A" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-quiz-opt1" type="text" value="${p.riddle_data && p.riddle_data.options[1] ? esc(p.riddle_data.options[1]) : ''}" placeholder="选项 B" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-quiz-opt2" type="text" value="${p.riddle_data && p.riddle_data.options[2] ? esc(p.riddle_data.options[2]) : ''}" placeholder="选项 C（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-quiz-opt3" type="text" value="${p.riddle_data && p.riddle_data.options[3] ? esc(p.riddle_data.options[3]) : ''}" placeholder="选项 D（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:13px;">正确答案：</span>
+            <select id="pe-quiz-answer" style="padding:6px; border:1px solid var(--border); border-radius:6px; background:#fff;">
+              <option value="0" ${p.riddle_data && p.riddle_data.answer === 0 ? 'selected' : ''}>选项 A</option>
+              <option value="1" ${p.riddle_data && p.riddle_data.answer === 1 ? 'selected' : ''}>选项 B</option>
+              <option value="2" ${p.riddle_data && p.riddle_data.answer === 2 ? 'selected' : ''}>选项 C</option>
+              <option value="3" ${p.riddle_data && p.riddle_data.answer === 3 ? 'selected' : ''}>选项 D</option>
+            </select>
           </div>
         </div>
-      </div>
 
       <div style="margin-bottom:16px;">
         <label style="font-size:12px;color:var(--muted);">正文（Markdown）</label>
@@ -1558,6 +1568,7 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
 function togglePostFeatures() {
   const feature = document.getElementById('pe-post-feature').value;
   document.getElementById('pe-poll-container').style.display = feature === 'poll' ? 'block' : 'none';
+  document.getElementById('pe-quiz-container').style.display = feature === 'riddle_quiz' ? 'block' : 'none';
   document.getElementById('pe-whisper-container').style.display = feature === 'whisper' ? 'block' : 'none';
 }
 
@@ -1668,11 +1679,10 @@ async function savePost(mode, postType) {
   const tags = tagsRaw ? tagsRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [];
   const images = [..._editorImages];
 
-  // 👈 收集投票数据
   // 收集附加功能数据
   const feature = document.getElementById('pe-post-feature').value;
   let pollData = null;
-  let isRiddle = false;
+  let riddleData = null;
   let whisperFaction = '';
 
   if (feature === 'poll') {
@@ -1683,8 +1693,20 @@ async function savePost(mode, postType) {
     }
     if (opts.length < 2) return showToast('投票必须至少填写 2 个选项');
     pollData = { options: opts };
-  } else if (feature === 'riddle') {
-    isRiddle = true;
+  } else if (feature === 'riddle_click') {
+    riddleData = { type: 'click' };
+  } else if (feature === 'riddle_quiz') {
+    const q = document.getElementById('pe-quiz-q').value.trim();
+    const opts = [];
+    for (let i = 0; i < 4; i++) {
+      const val = document.getElementById(`pe-quiz-opt${i}`).value.trim();
+      if (val) opts.push(val);
+    }
+    const ans = parseInt(document.getElementById('pe-quiz-answer').value);
+    if (!q) return showToast('请填写题目');
+    if (opts.length < 2) return showToast('请至少填写 2 个选项');
+    if (ans >= opts.length) return showToast('正确答案不在填写的选项内');
+    riddleData = { type: 'quiz', question: q, options: opts, answer: ans };
   } else if (feature === 'whisper') {
     whisperFaction = document.getElementById('pe-whisper-faction').value;
   }
@@ -1703,7 +1725,8 @@ async function savePost(mode, postType) {
     is_pinned: document.querySelector('#pe-is-pinned') ? document.querySelector('#pe-is-pinned').checked : false,
     poll_data: pollData,
     is_riddle: isRiddle,
-    whisper_faction: whisperFaction
+    whisper_faction: whisperFaction,
+    riddle_data: riddleData
   };
 
   let err;
