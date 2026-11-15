@@ -1482,9 +1482,25 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
       <div style="margin-bottom:16px; padding:12px; background:#f9f9f9; border-radius:8px; border:1px solid var(--border);">
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
           <label style="font-size:13px; font-weight:600;">帖子附加功能：</label>
-          <select id="pe-post-feature" onchange="togglePollOptions()" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:#fff;">
-            <option value="normal" ${!p.poll_data ? 'selected' : ''}>普通帖子</option>
+          <select id="pe-post-feature" onchange="togglePostFeatures()" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:#fff;">
+            <option value="normal" ${!p.poll_data && !p.is_riddle && !p.whisper_faction ? 'selected' : ''}>普通帖子</option>
             <option value="poll" ${p.poll_data ? 'selected' : ''}>发起投票</option>
+            <option value="riddle" ${p.is_riddle ? 'selected' : ''}>盲盒解密</option>
+            <option value="whisper" ${p.whisper_faction ? 'selected' : ''}>悄悄话（限阵营）</option>
+          </select>
+        </div>
+
+        <!-- 悄悄话阵营选择容器 -->
+        <div id="pe-whisper-container" style="display:${p.whisper_faction ? 'block' : 'none'}; margin-top:12px;">
+          <label style="font-size:12px; color:var(--muted);">选择可见阵营：</label>
+          <select id="pe-whisper-faction" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; margin-top:4px; background:#fff;">
+            <option value="精灵" ${p.whisper_faction === '精灵' ? 'selected' : ''}>精灵</option>
+            <option value="矮人" ${p.whisper_faction === '矮人' ? 'selected' : ''}>矮人</option>
+            <option value="人类" ${p.whisper_faction === '人类' ? 'selected' : ''}>人类</option>
+            <option value="异人" ${p.whisper_faction === '异人' ? 'selected' : ''}>异人</option>
+            <option value="240" ${p.whisper_faction === '240' ? 'selected' : ''}>240</option>
+            <option value="246" ${p.whisper_faction === '246' ? 'selected' : ''}>246</option>
+            <option value="240-1" ${p.whisper_faction === '240-1' ? 'selected' : ''}>240-1</option>
           </select>
         </div>
 
@@ -1539,12 +1555,10 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
 }
 
 // 切换投票选项的显示
-function togglePollOptions() {
+function togglePostFeatures() {
   const feature = document.getElementById('pe-post-feature').value;
-  const container = document.getElementById('pe-poll-container');
-  if (container) {
-    container.style.display = feature === 'poll' ? 'block' : 'none';
-  }
+  document.getElementById('pe-poll-container').style.display = feature === 'poll' ? 'block' : 'none';
+  document.getElementById('pe-whisper-container').style.display = feature === 'whisper' ? 'block' : 'none';
 }
 
 // 角色二级联动
@@ -1655,8 +1669,12 @@ async function savePost(mode, postType) {
   const images = [..._editorImages];
 
   // 👈 收集投票数据
+  // 收集附加功能数据
   const feature = document.getElementById('pe-post-feature').value;
   let pollData = null;
+  let isRiddle = false;
+  let whisperFaction = '';
+
   if (feature === 'poll') {
     const opts = [];
     for (let i = 0; i < 4; i++) {
@@ -1665,9 +1683,16 @@ async function savePost(mode, postType) {
     }
     if (opts.length < 2) return showToast('投票必须至少填写 2 个选项');
     pollData = { options: opts };
+  } else if (feature === 'riddle') {
+    isRiddle = true;
+  } else if (feature === 'whisper') {
+    whisperFaction = document.getElementById('pe-whisper-faction').value;
   }
-
+  
   const payload = {
+    poll_data: pollData,
+    is_riddle: isRiddle,
+    whisper_faction: whisperFaction
     id,
     character,
     date,
