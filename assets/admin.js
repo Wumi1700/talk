@@ -1491,21 +1491,18 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
           </select>
         </div>
 
-        <!-- 悄悄话阵营选择容器 -->
-        <div id="pe-whisper-container" style="display:${p.whisper_faction ? 'block' : 'none'}; margin-top:12px;">
-          <label style="font-size:12px; color:var(--muted);">选择可见阵营：</label>
-          <select id="pe-whisper-faction" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; margin-top:4px; background:#fff;">
-            <option value="精灵" ${p.whisper_faction === '精灵' ? 'selected' : ''}>精灵</option>
-            <option value="矮人" ${p.whisper_faction === '矮人' ? 'selected' : ''}>矮人</option>
-            <option value="人类" ${p.whisper_faction === '人类' ? 'selected' : ''}>人类</option>
-            <option value="异人" ${p.whisper_faction === '异人' ? 'selected' : ''}>异人</option>
-            <option value="240" ${p.whisper_faction === '240' ? 'selected' : ''}>240</option>
-            <option value="246" ${p.whisper_faction === '246' ? 'selected' : ''}>246</option>
-            <option value="240-1" ${p.whisper_faction === '240-1' ? 'selected' : ''}>240-1</option>
-          </select>
+        <!-- 投票选项容器（默认隐藏） -->
+        <div id="pe-poll-container" style="display:${p.poll_data ? 'block' : 'none'};">
+          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">填写投票选项（至少2个，最多4个，留空则不显示该选项）：</div>
+          <div style="display:grid; gap:8px;">
+            <input id="pe-poll-opt0" type="text" value="${p.poll_data && p.poll_data.options[0] ? esc(p.poll_data.options[0]) : ''}" placeholder="选项 A" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-poll-opt1" type="text" value="${p.poll_data && p.poll_data.options[1] ? esc(p.poll_data.options[1]) : ''}" placeholder="选项 B" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-poll-opt2" type="text" value="${p.poll_data && p.poll_data.options[2] ? esc(p.poll_data.options[2]) : ''}" placeholder="选项 C（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <input id="pe-poll-opt3" type="text" value="${p.poll_data && p.poll_data.options[3] ? esc(p.poll_data.options[3]) : ''}" placeholder="选项 D（可选）" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+          </div>
         </div>
 
-        <!-- 答题选项容器 -->
+        <!-- 答题选项容器（默认隐藏） -->
         <div id="pe-quiz-container" style="display:${p.riddle_data && p.riddle_data.type === 'quiz' ? 'block' : 'none'}; margin-top:12px; padding:12px; border:1px solid var(--border); border-radius:8px; background:#fff;">
           <div style="font-size:13px; font-weight:600; margin-bottom:8px;">设置解密题目</div>
           <input id="pe-quiz-q" type="text" value="${p.riddle_data && p.riddle_data.question ? esc(p.riddle_data.question) : ''}" placeholder="输入题目，如：红叶镇唯一的旅店叫什么？" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
@@ -1526,6 +1523,20 @@ async function openPostEditor(postId, characterHandle, postType, defaultFaction)
           </div>
         </div>
 
+        <!-- 悄悄话阵营选择容器 -->
+        <div id="pe-whisper-container" style="display:${p.whisper_faction ? 'block' : 'none'}; margin-top:12px;">
+          <label style="font-size:12px; color:var(--muted);">选择可见阵营：</label>
+          <select id="pe-whisper-faction" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; margin-top:4px; background:#fff;">
+            <option value="精灵" ${p.whisper_faction === '精灵' ? 'selected' : ''}>精灵</option>
+            <option value="矮人" ${p.whisper_faction === '矮人' ? 'selected' : ''}>矮人</option>
+            <option value="人类" ${p.whisper_faction === '人类' ? 'selected' : ''}>人类</option>
+            <option value="异人" ${p.whisper_faction === '异人' ? 'selected' : ''}>异人</option>
+            <option value="240" ${p.whisper_faction === '240' ? 'selected' : ''}>240</option>
+            <option value="246" ${p.whisper_faction === '246' ? 'selected' : ''}>246</option>
+            <option value="240-1" ${p.whisper_faction === '240-1' ? 'selected' : ''}>240-1</option>
+          </select>
+        </div>
+        
       <div style="margin-bottom:16px;">
         <label style="font-size:12px;color:var(--muted);">正文（Markdown）</label>
         <textarea id="pe-content" rows="10" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:4px;font-family:monospace;font-size:13px;resize:vertical;">${esc(p.content)}</textarea>
