@@ -4100,9 +4100,6 @@ const POSTS_PER_PAGE = 10;
 // 1. 数据清洗（加上 poll_data）
 function normalizePost(p) {
   return {
-    poll_data: p.poll_data || null,
-    is_riddle: p.is_riddle || false,
-    whisper_faction: p.whisper_faction || ''
     id: p.id,
     character: p.character,
     date: p.date || '',
@@ -4115,7 +4112,9 @@ function normalizePost(p) {
     event: p.event || '',
     archived: p.archived || false,
     isPinned: p.is_pinned || false,
-    poll_data: p.poll_data || null
+    poll_data: p.poll_data || null,
+    is_riddle: p.is_riddle || false,
+    whisper_faction: p.whisper_faction || ''
   };
 }
 
