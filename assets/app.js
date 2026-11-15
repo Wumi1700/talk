@@ -4113,6 +4113,7 @@ function normalizePost(p) {
     archived: p.archived || false,
     isPinned: p.is_pinned || false,
     poll_data: p.poll_data || null,
+    riddle_data: p.riddle_data || null,
     is_riddle: p.is_riddle || false,
     whisper_faction: p.whisper_faction || ''
   };
@@ -4121,70 +4122,100 @@ function normalizePost(p) {
 // 2. 帖子卡片渲染（包含投票坑位）
 function renderPostCard(post, isDetail = false, showPin = false) {
   const char = CHARACTERS[post.character] || { name: post.character || '未知角色', handle: post.character || 'unknown' };
-  const tags = (post.tags || []).map(t => `<a href="tags.html?tag=${encodeURIComponent(t)}" class="tag">#${t}</a>`).join('');
+  
+  // 标签：支持点击跳转到标签聚合页
+  const tags = (post.tags || []).map(t => `<a href="tags.html?tag=${encodeURIComponent(t)}" class="tag" onclick="event.stopPropagation()">#${t}</a>`).join('');
   const verified = char.verified ? `<span class="verified">✓ ${char.verified}</span>` : '';
 
   let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
   const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
 
   const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
-  const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a'))return;location.href='post.html?id=${post.id}'"`;
+  
+  // 点击卡片跳转（如果点击的是按钮、链接、或者盲盒，则不跳转）
+  const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a') || event.target.closest('.lock-box'))return;location.href='post.html?id=${post.id}'"`;
+  
+  const shouldCollapse = post.content.length > 150 && !isDetail;
+
+  // ===== 附加功能判断 =====
   const myFaction = currentProfile ? currentProfile.faction : '';
   const isWhisperLocked = post.whisper_faction && post.whisper_faction !== myFaction;
-  const isRiddleUnlocked = localStorage.getItem(`riddle_${post.id}`) === 'true';
-  const isRiddleLocked = post.is_riddle && !isRiddleUnlocked;
-  const shouldCollapse = post.content.length > 150 && !isDetail;
+  
+  let isRiddleLocked = false;
+  let riddleType = '';
+  if (post.riddle_data) {
+    const isUnlocked = localStorage.getItem(`riddle_${post.id}`) === 'true';
+    if (!isUnlocked) {
+      isRiddleLocked = true;
+      riddleType = post.riddle_data.type;
+    }
+  }
+
+  // ===== 渲染正文区域 =====
+  let bodyHTML = '';
+  if (isWhisperLocked) {
+    bodyHTML = `
+      <div class="lock-box">
+        <div style="font-size:28px;margin-bottom:8px;">🚫</div>
+        <div style="font-weight:bold;color:var(--muted);">阵营结界</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px;">这是属于「${post.whisper_faction}」的秘密，无法查看。</div>
+      </div>`;
+  } else if (isRiddleLocked) {
+    bodyHTML = `
+      <div class="lock-box riddle-box" id="riddle-lock-${post.id}" onclick="triggerRiddle('${post.id}', '${riddleType}', event)">
+        <div style="font-size:28px;margin-bottom:8px;">🔒</div>
+        <div style="font-weight:bold;">这段情报被人有意遮掩</div>
+        <div style="font-size:13px;color:var(--primary-dark);margin-top:6px;">[点击可能看到些不该看的东西]</div>
+      </div>
+      <div id="riddle-body-${post.id}" style="display:none;">
+        <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
+          <div class="post-body">${renderMarkdown(post.content)}</div>
+        </div>
+        ${shouldCollapse ? `<button class="expand-btn" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+      </div>
+    `;
+  } else {
+    bodyHTML = `
+      <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
+        <div class="post-body">${renderMarkdown(post.content)}</div>
+      </div>
+      ${shouldCollapse ? `<button class="expand-btn" id="expand-btn-${post.id}" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+    `;
+  }
 
   return `
     <article class="post" data-id="${post.id}" ${cardClick}>
       <div class="post-header">
         ${avatarHTML(char)}
         <div class="post-meta">
-          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}">${char.name}</a>${verified}${(showPin && post.isPinned) ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">📌 置顶</span>' : ''}</div>
+          <div class="post-name">${char.faction ? factionIcon(char.faction) + ' ' : ''}<a href="character.html?handle=${char.handle}" onclick="event.stopPropagation()">${char.name}</a>${verified}${(showPin && post.isPinned) ? '<span style="font-size:10px;background:#E76F51;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">📌 置顶</span>' : ''}</div>
           <div class="post-sub">@${char.handle} · <span title="${post.date || ''}">${relativeTime(post.date)}</span>${post.location ? ' · 📍'+post.location : ''}</div>
         </div>
       </div>
       
-      ${isWhisperLocked ? `
-        <div class="lock-box">
-          <div style="font-size:28px;margin-bottom:8px;">🚫</div>
-          <div style="font-weight:bold;color:var(--muted);">阵营结界</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:4px;">这是属于「${post.whisper_faction}」的秘密，无法查看。</div>
-        </div>
-      ` : isRiddleLocked ? `
-        <div class="lock-box riddle-box" id="riddle-lock-${post.id}" onclick="revealRiddle('${post.id}', event)">
-          <div style="font-size:28px;margin-bottom:8px;">🔒</div>
-          <div style="font-weight:bold;">这段情报被人有意遮掩</div>
-          <div style="font-size:13px;color:var(--primary-dark);margin-top:6px;">[点击可能看到些不该看的东西]</div>
-        </div>
-        <div id="riddle-body-${post.id}" style="display:none;">
-          <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}">
-            <div class="post-body">${renderMarkdown(post.content)}</div>
-          </div>
-          ${shouldCollapse ? `<button class="expand-btn" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
-        </div>
-      ` : `
-        <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
-          <div class="post-body">${renderMarkdown(post.content)}</div>
-        </div>
-        ${shouldCollapse ? `<button class="expand-btn" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
-      `}
+      ${bodyHTML}
       
       <!-- 投票坑位 -->
       ${post.poll_data ? `<div class="poll-box" id="poll-box-${post.id}"><div class="empty">加载投票中...</div></div>` : ''}
       
       ${renderPostImages(post.images)}
       <div class="post-tags">${tags}</div>
+      
       <div class="post-actions" style="display:flex; align-items:center; gap:24px;">
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}"><span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span></button>
+        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}">
+          <span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span>
+        </button>
+        
         <button class="action" onclick="location.href='post.html?id=${post.id}'">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
           <span>${commentCount}</span>
         </button>
+        
         <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
           <span>${isBookmarked ? '已赞同' : '赞同'}</span>
         </button>
+        
         <button class="action" onclick="copyPostLink('${post.id}', event)" style="margin-left:auto; padding-right:0;" title="摘抄帖子">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
         </button>
@@ -4192,7 +4223,6 @@ function renderPostCard(post, isDetail = false, showPin = false) {
     </article>
   `;
 }
-
 // 3. 首页分页渲染（无限滚动）
 function renderHomePosts() {
   const feed = $('#feed');
@@ -4490,5 +4520,89 @@ function revealRiddle(postId, event) {
   if (lockEl && bodyEl) {
     lockEl.style.display = 'none';
     bodyEl.style.display = 'block';
+  }
+}
+
+// ===== 盲盒解密逻辑 =====
+function triggerRiddle(postId, type, event) {
+  if (event) event.stopPropagation();
+  
+  // 1. 检查是否在冷却中
+  const cooldown = localStorage.getItem(`riddle_cd_${postId}`);
+  if (cooldown && Date.now() < parseInt(cooldown)) {
+    const remainMin = Math.ceil((parseInt(cooldown) - Date.now()) / 60000);
+    return showToast(`结界锁定中，请 ${remainMin} 分钟后再试`);
+  }
+
+  // 2. 直接解锁型
+  if (type === 'click') {
+    localStorage.setItem(`riddle_${postId}`, 'true');
+    document.getElementById(`riddle-lock-${postId}`).style.display = 'none';
+    document.getElementById(`riddle-body-${postId}`).style.display = 'block';
+    return showToast('封印已解除');
+  }
+
+  // 3. 答题解锁型
+  const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
+  if (!post || !post.riddle_data) return;
+
+  openRiddleModal(post, postId);
+}
+
+function openRiddleModal(post, postId) {
+  const data = post.riddle_data;
+  
+  const modal = document.createElement('div');
+  modal.id = 'riddle-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  
+  const optionsHTML = data.options.map((opt, i) => `
+    <div class="riddle-opt" onclick="submitRiddleAnswer('${postId}', ${i}, ${data.answer})" style="padding:12px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;cursor:pointer;text-align:center;background:#fff;">
+      ${String.fromCharCode(65+i)}. ${esc(opt)}
+    </div>
+  `).join('');
+
+  modal.innerHTML = `
+    <div style="background:#fff;padding:24px;border-radius:16px;width:90%;max-width:400px;box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;">
+      <button onclick="document.getElementById('riddle-modal').remove()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;">&times;</button>
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:28px;">🔮</div>
+        <div style="font-weight:800;font-size:16px;margin-top:8px;">智慧检定</div>
+      </div>
+      <div style="font-size:14px;margin-bottom:16px;line-height:1.5;color:var(--text);text-align:center;">
+        ${esc(data.question)}
+      </div>
+      ${optionsHTML}
+    </div>
+  `;
+
+  // 点击外部关闭
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+
+  document.body.appendChild(modal);
+}
+
+function submitRiddleAnswer(postId, selectedIdx, correctIdx) {
+  const modal = document.getElementById('riddle-modal');
+  
+  if (selectedIdx === correctIdx) {
+    // 答对
+    localStorage.setItem(`riddle_${postId}`, 'true');
+    if (modal) modal.remove();
+    showToast('情报已解锁');
+    const lockEl = document.getElementById(`riddle-lock-${postId}`);
+    const bodyEl = document.getElementById(`riddle-body-${postId}`);
+    if (lockEl && bodyEl) {
+      lockEl.style.display = 'none';
+      bodyEl.style.display = 'block';
+    }
+  } else {
+    // 答错，锁定 1 小时
+    const cooldownTime = Date.now() + 60 * 60 * 1000;
+    localStorage.setItem(`riddle_cd_${postId}`, cooldownTime.toString());
+    if (modal) modal.remove();
+    showToast('答案错误！结界已锁定 1 小时，请回顾剧情后再来。');
   }
 }
