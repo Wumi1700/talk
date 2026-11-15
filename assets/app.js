@@ -4416,7 +4416,7 @@ async function initHome() {
       ${renderHotsearchCard()}
       <div class="card">
         <h3>推荐角色</h3>
-        <div id="recommend">
+        <div id="recommend" class="recommend-scroll-box">
           ${Object.values(CHARACTERS).map(c => `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
               ${avatarHTML(c)}
