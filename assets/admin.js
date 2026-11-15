@@ -1721,7 +1721,7 @@ async function savePost(mode, postType) {
   } else if (feature === 'whisper') {
     whisperFaction = document.getElementById('pe-whisper-faction').value;
   }
-  
+
   const payload = {
     id,
     character,
@@ -1733,11 +1733,9 @@ async function savePost(mode, postType) {
     post_type: postType || 'main',
     faction,
     event,
-    is_pinned: document.querySelector('#pe-is-pinned') ? document.querySelector('#pe-is-pinned').checked : false,
     poll_data: pollData,
-    is_riddle: isRiddle,
-    whisper_faction: whisperFaction,
-    riddle_data: riddleData
+    riddle_data: riddleData,
+    whisper_faction: whisperFaction
   };
 
   let err;
