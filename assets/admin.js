@@ -1690,9 +1690,6 @@ async function savePost(mode, postType) {
   }
   
   const payload = {
-    poll_data: pollData,
-    is_riddle: isRiddle,
-    whisper_faction: whisperFaction
     id,
     character,
     date,
@@ -1704,7 +1701,9 @@ async function savePost(mode, postType) {
     faction,
     event,
     is_pinned: document.querySelector('#pe-is-pinned') ? document.querySelector('#pe-is-pinned').checked : false,
-    poll_data: pollData
+    poll_data: pollData,
+    is_riddle: isRiddle,
+    whisper_faction: whisperFaction
   };
 
   let err;
