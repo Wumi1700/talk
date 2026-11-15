@@ -867,7 +867,7 @@ async function renderMainPosts() {
         <button class="btn role-btn ${contentFilter===''?'btn-primary':''}" data-name="全部" style="padding:4px 12px;font-size:13px;" onclick="filterContent('')">全部</button>
         ${mainChars.map(c => {
           const cnt = (grouped[c.handle] || []).length;
-          return `<button class="btn role-btn ${contentFilter===c.handle?'btn-primary':''}" data-name="${esc(c.name)} ${esc(c.handle)}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${c.handle}')">${esc(c.name)} (${cnt})</button>`;
+          return `<button class="btn role-btn ${contentFilter===c.handle?'btn-primary':''}" data-name="${esc(c.name)} ${esc(c.handle)}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${c.handle}')">${c.faction ? factionIcon(c.faction) + ' ' : ''}${esc(c.name)} (${cnt})</button>`;
         }).join('')}
       </div>
 
@@ -876,7 +876,7 @@ async function renderMainPosts() {
         <span style="font-size:13px;color:var(--muted);font-weight:bold;width:40px;">NPC：</span>
         ${npcChars.map(c => {
           const cnt = (grouped[c.handle] || []).length;
-          return `<button class="btn role-btn ${contentFilter===c.handle?'btn-primary':''}" data-name="${esc(c.name)} ${esc(c.handle)}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${c.handle}')">${esc(c.name)} (${cnt})</button>`;
+          return `<button class="btn role-btn ${contentFilter===c.handle?'btn-primary':''}" data-name="${esc(c.name)} ${esc(c.handle)}" style="padding:4px 12px;font-size:13px;" onclick="filterContent('${c.handle}')">${c.faction ? factionIcon(c.faction) + ' ' : ''}${esc(c.name)} (${cnt})</button>`;
         }).join('')}
       </div>
     </div>
@@ -1601,7 +1601,7 @@ function syncPostCharDetail(oldChar = '') {
   const filtered = Object.values(CHARACTERS).filter(c => !!c.isNPC === isNPC);
 
   charSel.innerHTML = '<option value="">-- 选择角色 --</option>' + filtered.map(c => 
-    `<option value="${c.handle}" data-faction="${c.faction || ''}" ${oldChar === c.handle ? 'selected' : ''}>${esc(c.name)}</option>`
+    `<option value="${c.handle}" data-faction="${c.faction || ''}" ${oldChar === c.handle ? 'selected' : ''}>${c.faction ? factionIcon(c.faction) + ' ' : ''}${esc(c.name)}</option>`
   ).join('');
   
   charSel.disabled = false;
