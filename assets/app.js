@@ -4100,6 +4100,9 @@ const POSTS_PER_PAGE = 10;
 // 1. 数据清洗（加上 poll_data）
 function normalizePost(p) {
   return {
+    poll_data: p.poll_data || null,
+    is_riddle: p.is_riddle || false,
+    whisper_faction: p.whisper_faction || ''
     id: p.id,
     character: p.character,
     date: p.date || '',
@@ -4127,6 +4130,10 @@ function renderPostCard(post, isDetail = false, showPin = false) {
 
   const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
   const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a'))return;location.href='post.html?id=${post.id}'"`;
+  const myFaction = currentProfile ? currentProfile.faction : '';
+  const isWhisperLocked = post.whisper_faction && post.whisper_faction !== myFaction;
+  const isRiddleUnlocked = localStorage.getItem(`riddle_${post.id}`) === 'true';
+  const isRiddleLocked = post.is_riddle && !isRiddleUnlocked;
   const shouldCollapse = post.content.length > 150 && !isDetail;
 
   return `
@@ -4139,10 +4146,30 @@ function renderPostCard(post, isDetail = false, showPin = false) {
         </div>
       </div>
       
-      <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
-        <div class="post-body">${renderMarkdown(post.content)}</div>
-      </div>
-      ${shouldCollapse ? `<button class="expand-btn" id="expand-btn-${post.id}" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+      ${isWhisperLocked ? `
+        <div class="lock-box">
+          <div style="font-size:28px;margin-bottom:8px;">🚫</div>
+          <div style="font-weight:bold;color:var(--muted);">阵营结界</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px;">这是属于「${post.whisper_faction}」的秘密，无法查看。</div>
+        </div>
+      ` : isRiddleLocked ? `
+        <div class="lock-box riddle-box" id="riddle-lock-${post.id}" onclick="revealRiddle('${post.id}', event)">
+          <div style="font-size:28px;margin-bottom:8px;">🔒</div>
+          <div style="font-weight:bold;">这段情报被人有意遮掩</div>
+          <div style="font-size:13px;color:var(--primary-dark);margin-top:6px;">[点击可能看到些不该看的东西]</div>
+        </div>
+        <div id="riddle-body-${post.id}" style="display:none;">
+          <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}">
+            <div class="post-body">${renderMarkdown(post.content)}</div>
+          </div>
+          ${shouldCollapse ? `<button class="expand-btn" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+        </div>
+      ` : `
+        <div class="post-body-wrapper ${shouldCollapse ? 'collapsed' : ''}" id="post-body-${post.id}">
+          <div class="post-body">${renderMarkdown(post.content)}</div>
+        </div>
+        ${shouldCollapse ? `<button class="expand-btn" onclick="togglePostExpand('${post.id}', event)">展开全文</button>` : ''}
+      `}
       
       <!-- 投票坑位 -->
       ${post.poll_data ? `<div class="poll-box" id="poll-box-${post.id}"><div class="empty">加载投票中...</div></div>` : ''}
@@ -4454,4 +4481,15 @@ async function initPost() {
 // 7. 补全 esc 函数（如果之前你里面没有的话，加上这句防止报错）
 function esc(str) {
   return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function revealRiddle(postId, event) {
+  if (event) event.stopPropagation();
+  localStorage.setItem(`riddle_${postId}`, 'true');
+  const lockEl = document.getElementById(`riddle-lock-${postId}`);
+  const bodyEl = document.getElementById(`riddle-body-${postId}`);
+  if (lockEl && bodyEl) {
+    lockEl.style.display = 'none';
+    bodyEl.style.display = 'block';
+  }
 }
