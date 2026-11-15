@@ -1041,3 +1041,21 @@ button.btn-primary {
   text-align: right;
   margin-top: 4px;
 }
+
+/* 盲盒与阵营结界 */
+.lock-box {
+  margin: 12px 0;
+  padding: 20px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.riddle-box {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.riddle-box:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
