@@ -2052,7 +2052,15 @@ async function initCharacter() {
   const char = CHARACTERS[handle];
   const root = $('#profile');
   if (!char) { root.innerHTML = '<div class="empty">找不到这个角色</div>'; return; }
-  const posts = POSTS.filter(p => p.character === handle);
+  const allPosts = [...POSTS, ...FORUM_POSTS];
+  const posts = allPosts.filter(p => p.character === handle).sort((a, b) => {
+    // 置顶优先
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    // 时间倒序
+    return (b.date || '').localeCompare(a.date || '');
+  });
+  
   const bannerStyle = char.banner ? `style="background-image:url('${char.banner}');background-size:cover;background-position:center"` : '';
 
   const { count: realFollowers } = await db.from('follows').select('*', { count: 'exact', head: true }).eq('character_id', handle);
@@ -4130,7 +4138,11 @@ function renderPostCard(post, isDetail = false, showPin = false) {
   let stats = POST_STATS[post.id] || { like_count: 0, comment_count: 0, is_liked: false, is_bookmarked: false };
   const { like_count: likeCount, comment_count: commentCount, is_liked: isLiked, is_bookmarked: isBookmarked } = stats;
 
-  const guard = (call) => forumReadOnly ? `showToast('你不是这个阵营的成员')` : call;
+  // 👈 判断是否是别人的阵营帖子
+  const isOtherFactionPost = post.postType === 'forum' && post.faction && currentProfile && post.faction !== currentProfile.faction;
+  
+  // 只要满足任何一个只读条件，就拦截操作
+  const guard = (call) => (forumReadOnly || isOtherFactionPost) ? `showToast('你不是这个阵营的成员，无法互动')` : call;
   
   // 点击卡片跳转（如果点击的是按钮、链接、或者盲盒，则不跳转）
   const cardClick = isDetail ? '' : `style="cursor:pointer;" onclick="if(event.target.closest('button') || event.target.closest('a') || event.target.closest('.lock-box'))return;location.href='post.html?id=${post.id}'"`;
@@ -4202,16 +4214,16 @@ function renderPostCard(post, isDetail = false, showPin = false) {
       <div class="post-tags">${tags}</div>
       
       <div class="post-actions" style="display:flex; align-items:center; gap:24px;">
-        <button class="action ${isLiked ? 'liked' : ''}" onclick="${guard(`toggleLike('${post.id}', this)`)}">
+        <button class="action ${isLiked ? 'liked' : ''}" ${isOtherFactionPost ? 'style="opacity:0.4; cursor:not-allowed;"' : ''} onclick="${guard(`toggleLike('${post.id}', this)`)}">
           <span class="heart-icon">${isLiked ? '♥' : '♡'}</span> <span class="like-count">${likeCount}</span>
         </button>
         
-        <button class="action" onclick="location.href='post.html?id=${post.id}'">
+        <button class="action" ${isOtherFactionPost ? 'style="opacity:0.4; cursor:not-allowed;"' : ''} onclick="${isOtherFactionPost ? `showToast('你不是这个阵营的成员，无法互动')` : `location.href='post.html?id=${post.id}'`}">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
           <span>${commentCount}</span>
         </button>
         
-        <button class="action ${isBookmarked ? 'bookmarked' : ''}" onclick="${guard(`toggleBookmark('${post.id}', this)`)}">
+        <button class="action ${isBookmarked ? 'bookmarked' : ''}" ${isOtherFactionPost ? 'style="opacity:0.4; cursor:not-allowed;"' : ''} onclick="${guard(`toggleBookmark('${post.id}', this)`)}">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
           <span>${isBookmarked ? '已赞同' : '赞同'}</span>
         </button>
@@ -4224,6 +4236,9 @@ function renderPostCard(post, isDetail = false, showPin = false) {
   `;
 }
 // 3. 首页分页渲染（无限滚动）
+// 全局变量
+let homeObserver = null;
+
 function renderHomePosts() {
   const feed = $('#feed');
   if (!feed) return;
@@ -4232,7 +4247,11 @@ function renderHomePosts() {
   const end = start + POSTS_PER_PAGE;
   const pagePosts = homeDisplayPosts.slice(start, end);
 
-  if (pagePosts.length === 0) return;
+  if (pagePosts.length === 0) {
+    const oldLoader = document.getElementById('home-loader');
+    if (oldLoader) oldLoader.remove();
+    return;
+  }
 
   const parts = [];
   for (let i = 0; i < pagePosts.length; i++) {
@@ -4257,9 +4276,20 @@ function renderHomePosts() {
       </div>
       <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
     `);
+
+    if (homeObserver) homeObserver.disconnect();
+    
+    homeObserver = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        homeObserver.disconnect(); 
+        renderHomePosts(); 
+      }
+    }, { rootMargin: '200px' }); 
+
+    homeObserver.observe(document.getElementById('home-loader'));
   }
 
-  // 每次渲染完新帖子，立刻唤醒其中的投票模块
+  // 唤醒投票
   initAllPolls();
 }
 
@@ -4315,6 +4345,10 @@ async function renderPollUI(postId, options) {
 
 async function submitVote(postId, optionIndex, options) {
   if (!currentUser) return showToast('请先登录后再投票');
+  const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
+  if (post && post.postType === 'forum' && post.faction && currentProfile && post.faction !== currentProfile.faction) {
+    return showToast('你不是这个阵营的成员，无法参与投票');
+  }
   
   const { data: existing } = await db.from('post_votes').select('id').eq('post_id', postId).eq('user_id', currentUser.id);
   if (existing && existing.length > 0) return showToast('你已经投过票了');
@@ -4526,6 +4560,10 @@ function revealRiddle(postId, event) {
 // ===== 盲盒解密逻辑 =====
 function triggerRiddle(postId, type, event) {
   if (event) event.stopPropagation();
+  const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
+  if (post && post.postType === 'forum' && post.faction && currentProfile && post.faction !== currentProfile.faction) {
+    return showToast('你不是这个阵营的成员，无法解密');
+  }
   
   // 1. 检查是否在冷却中
   const cooldown = localStorage.getItem(`riddle_cd_${postId}`);
