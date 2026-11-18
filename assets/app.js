@@ -3184,49 +3184,140 @@ async function initSearch() {
   const root = $('#search-app');
   const q = new URLSearchParams(location.search).get('q') || '';
   
-  // 判断是不是手机端
-  const isMobile = window.innerWidth <= 768;
+  const searchInput = document.querySelector('.search-box input');
+  const searchBoxParent = document.querySelector('.search-box');
   
-  // 如果是手机端，强行在主内容区插入一个搜索框
-  if (isMobile) {
-    root.innerHTML = `
-      <div class="card" style="padding: 12px; margin-bottom: 16px;">
-        <div style="display:flex; gap:8px;">
-          <input id="mobile-search-input" type="text" value="${escapeText(q)}" placeholder="搜索角色、帖子、标签…" style="flex:1; padding:10px; border:1px solid var(--border); border-radius:8px; outline:none;">
-          <button class="btn btn-primary" onclick="doMobileSearch()" style="padding:0 16px;">搜索</button>
-        </div>
-      </div>
-      <div id="search-results-area"></div>
-    `;
-    
-    // 监听回车键
-    setTimeout(() => {
-      const input = document.getElementById('mobile-search-input');
-      if (input) {
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') doMobileSearch();
-        });
-      }
-    }, 100);
-    
-    // 如果没带参数，直接退出
-    if (!q) return;
-    
-    // 如果带了参数，后续的结果渲染到 search-results-area 中
-    var renderTarget = document.getElementById('search-results-area');
-  } else {
-    // 电脑端原本的逻辑
-    const searchInput = document.querySelector('.search-box input');
-    if (searchInput && q) searchInput.value = q;
-
-    if (!q) {
-      root.innerHTML = `
-        <div class="card"><h3>搜索</h3></div>
-        <div class="empty">输入关键词，搜索角色、帖子、标签</div>
-      `;
-      return;
+  // 历史记录工具
+  const getHistory = () => JSON.parse(localStorage.getItem('talk_search_history') || '[]');
+  const addHistory = (keyword) => {
+    if (!keyword.trim()) return;
+    let history = getHistory();
+    history = history.filter(item => item !== keyword.trim());
+    history.unshift(keyword.trim());
+    localStorage.setItem('talk_search_history', JSON.stringify(history.slice(0, 10)));
+  };
+  const clearHistory = () => {
+    localStorage.removeItem('talk_search_history');
+    if (searchInput) searchInput.focus();
+  };
+  const getTrending = () => {
+    if (typeof HOTSEARCH !== 'undefined' && HOTSEARCH.byFaction) {
+      const allHot = [];
+      Object.values(HOTSEARCH.byFaction).forEach(arr => arr.forEach(item => allHot.push(item.text)));
+      return [...new Set(allHot)].slice(0, 3);
     }
-    var renderTarget = root;
+    return ['日常', '公告', '王都'];
+  };
+
+  // 👈 核心：渲染搜索联想/历史面板
+  const renderSearchPanel = (keyword = '') => {
+    let panel = document.getElementById('search-panel-modal');
+    if (panel) panel.remove();
+
+    panel = document.createElement('div');
+    panel.id = 'search-panel-modal';
+    panel.className = 'search-panel';
+
+    let html = '';
+
+    if (!keyword.trim()) {
+      // 1. 没输入文字：显示历史 + 常搜
+      const history = getHistory();
+      const trending = getTrending();
+
+      if (history.length > 0) {
+        html += `<div class="search-panel-header"><span>搜索历史</span><span class="clear-btn" onclick="document.getElementById('search-panel-modal').remove(); localStorage.removeItem('talk_search_history');">清空</span></div>`;
+        html += history.map(h => `<div class="search-panel-item" onclick="executeSearch('${h.replace(/'/g, "\\'")}')">🕒 ${h}</div>`).join('');
+      }
+      if (trending.length > 0) {
+        html += `<div class="search-panel-header" style="margin-top:12px;"><span>其他人常搜</span></div>`;
+        html += trending.map(t => `<div class="search-panel-item" onclick="executeSearch('${t.replace(/'/g, "\\'")}')">🔥 ${t}</div>`).join('');
+      }
+    } else {
+      // 2. 输入了文字：显示实时联想（角色、标签、帖子）
+      const lowerQ = keyword.toLowerCase();
+      
+      // 找角色
+      const matchedChars = Object.values(CHARACTERS).filter(c => 
+        (c.name && c.name.toLowerCase().includes(lowerQ)) || 
+        (c.handle && c.handle.toLowerCase().includes(lowerQ))
+      ).slice(0, 3);
+
+      // 找标签
+      const allTags = new Set();
+      POSTS.forEach(p => (p.tags || []).forEach(t => allTags.add(t)));
+      const matchedTags = Array.from(allTags).filter(t => t.toLowerCase().includes(lowerQ)).slice(0, 2);
+
+      // 找帖子
+      const matchedPosts = POSTS.filter(p => p.content && p.content.toLowerCase().includes(lowerQ)).slice(0, 2);
+
+      if (matchedChars.length === 0 && matchedTags.length === 0 && matchedPosts.length === 0) {
+        html += `<div class="search-panel-item" style="color:var(--muted); cursor:default;">没有找到相关联想</div>`;
+      } else {
+        html += matchedChars.map(c => `<div class="search-panel-item" onclick="executeSearch('${c.name.replace(/'/g, "\\'")}')">👤 角色：<span class="highlight">${c.name}</span></div>`).join('');
+        html += matchedTags.map(t => `<div class="search-panel-item" onclick="executeSearch('${t.replace(/'/g, "\\'")}')"># 标签：<span class="highlight">#${t}</span></div>`).join('');
+        html += matchedPosts.map(p => `<div class="search-panel-item" onclick="executeSearch('${keyword.replace(/'/g, "\\'")}')">📝 帖子：...${p.content.substring(0, 15)}<span class="highlight">${keyword}</span>...</div>`).join('');
+      }
+    }
+
+    if (!html) return;
+
+    panel.innerHTML = html;
+    
+    // 定位
+    let left = 0, top = 0, width = 300;
+    if (searchBoxParent) {
+      const rect = searchBoxParent.getBoundingClientRect();
+      left = rect.left;
+      top = rect.bottom;
+      width = Math.max(rect.width, 240);
+    }
+    
+    panel.style.position = 'fixed';
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.width = width + 'px';
+    panel.style.zIndex = '99999';
+    panel.style.display = 'block';
+    document.body.appendChild(panel);
+  };
+
+  // 全局执行搜索
+  window.executeSearch = (keyword) => {
+    addHistory(keyword);
+    location.href = 'search.html?q=' + encodeURIComponent(keyword);
+  };
+
+  // 绑定搜索框事件
+  if (searchInput) {
+    // 如果 URL 有 q，就回显
+    if (q) searchInput.value = q;
+
+    searchInput.addEventListener('focus', () => renderSearchPanel(searchInput.value));
+    searchInput.addEventListener('input', () => renderSearchPanel(searchInput.value));
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = searchInput.value.trim();
+        if (val) executeSearch(val);
+      }
+    });
+
+    // 点击外部关闭面板
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('search-panel-modal');
+      if (panel && !e.target.closest('.search-box') && !e.target.closest('#search-panel-modal')) {
+        panel.remove();
+      }
+    });
+  }
+
+  // ===== 下面是原本的搜索结果渲染逻辑 =====
+  if (!q) {
+    root.innerHTML = `
+      <div class="card"><h3>搜索</h3></div>
+      <div class="empty">输入关键词，搜索角色、帖子、标签</div>
+    `;
+    return;
   }
 
   const lowerQ = q.toLowerCase();
@@ -3660,13 +3751,9 @@ async function initUserProfileView() {
 document.addEventListener('DOMContentLoaded', () => {
     // 极简 SVG 搜索图标
   const searchSVG = `<svg viewBox="0 0 24 24" class="search-icon-svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
-
-  // 替换电脑端/手机端顶栏中文本为 🔍 的链接
   document.querySelectorAll('a').forEach(a => {
     if (a.innerHTML.trim() === '🔍') {
       a.innerHTML = searchSVG;
-      a.style.display = 'inline-flex';
-      a.style.alignItems = 'center';
     }
   });
   const mainEl = document.querySelector('main');
