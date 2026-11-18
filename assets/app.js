@@ -1599,14 +1599,13 @@ async function renderCharacterTab(tab, char, posts) {
 
   if (tab === 'posts') {
     if (posts.length) {
-      // 1. 排序：置顶优先，其次按日期倒序
+      // 👈 确保这里用的就是传进来的合并好的 posts，绝对不要再在这里查 POSTS！
       const sortedPosts = [...posts].sort((a, b) => {
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
         return (b.date || '').localeCompare(a.date || '');
       });
       
-      // 2. 👈 关键修改：传入 true 开启置顶标签的显示
       const html = sortedPosts.map(p => renderPostCard(p, false, true)).join('');
       tabContent.innerHTML = html;
     } else {
@@ -1632,7 +1631,6 @@ async function renderCharacterTab(tab, char, posts) {
     const likeIds = char.likes || [];
     const likedPosts = POSTS.filter(p => likeIds.includes(p.id));
     if (!likedPosts.length) return tabContent.innerHTML = '<div class="empty">还没有点赞过帖子</div>';
-    // 这里的点赞列表，你如果想显示置顶标签，也可以传入 true，暂时按原样 false 处理
     tabContent.innerHTML = likedPosts.map(p => renderPostCard(p, false, false)).join('');
   } else if (tab === 'bookmarks') {
     if (!privacy.bookmarks) return tabContent.innerHTML = '<div class="empty">该角色未公开收藏列表</div>';
@@ -2047,19 +2045,17 @@ async function initCharacter() {
   await checkUser();
   if (currentProfile && currentProfile.is_banned) return;
   await loadData();
+  await loadForumData(); // 👈 关键：必须把论坛数据也拉出来
   await loadPostStats();
+  
   const handle = new URLSearchParams(location.search).get('handle') || 'daniel';
   const char = CHARACTERS[handle];
   const root = $('#profile');
   if (!char) { root.innerHTML = '<div class="empty">找不到这个角色</div>'; return; }
+  
+  // 👈 关键：把主页帖和论坛帖合并，并过滤出这个角色的
   const allPosts = [...POSTS, ...FORUM_POSTS];
-  const posts = allPosts.filter(p => p.character === handle).sort((a, b) => {
-    // 置顶优先
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    // 时间倒序
-    return (b.date || '').localeCompare(a.date || '');
-  });
+  const posts = allPosts.filter(p => p.character === handle);
   
   const bannerStyle = char.banner ? `style="background-image:url('${char.banner}');background-size:cover;background-position:center"` : '';
 
@@ -2095,16 +2091,11 @@ async function initCharacter() {
         <span><b>${char.following || 0}</b> 关注</span>
       </div>
     </div>
-    <div class="profile-tabs" id="profile-tabs" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-      <div style="display:flex;">
-        <button class="active" data-tab="posts">动态</button>
-        ${(char.privacy || {}).follows !== false ? '<button data-tab="follows">关注</button>' : ''}
-        ${(char.privacy || {}).likes !== false ? '<button data-tab="likes">点赞</button>' : ''}
-        ${(char.privacy || {}).bookmarks !== false ? '<button data-tab="bookmarks">收藏</button>' : ''}
-      </div>
-      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;cursor:pointer;margin-right:10px;">
-        <input type="checkbox" id="show-archived-chk" onchange="toggleArchivedPosts('${handle}')"> 查看全部（含旧帖）
-      </label>
+    <div class="profile-tabs" id="profile-tabs">
+      <button class="active" data-tab="posts">动态</button>
+      ${(char.privacy || {}).follows !== false ? '<button data-tab="follows">关注</button>' : ''}
+      ${(char.privacy || {}).likes !== false ? '<button data-tab="likes">点赞</button>' : ''}
+      ${(char.privacy || {}).bookmarks !== false ? '<button data-tab="bookmarks">收藏</button>' : ''}
     </div>
     <div id="tab-content"></div>
   `;
