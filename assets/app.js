@@ -4072,30 +4072,6 @@ async function renderPollUI(postId, options) {
   box.innerHTML = html;
 }
 
-// 提交投票
-async function submitVote(postId, optionIndex, options) {
-  if (!currentUser) return showToast('请先登录后再投票');
-  
-  // 先检查是否投过（防止手速过快连点）
-  const { data: existing } = await db.from('post_votes').select('id').eq('post_id', postId).eq('user_id', currentUser.id);
-  if (existing && existing.length > 0) {
-    return showToast('你已经投过票了');
-  }
-
-  // 插入投票
-  const { error } = await db.from('post_votes').insert({
-    post_id: postId,
-    user_id: currentUser.id,
-    option_index: optionIndex
-  });
-
-  if (error) return showToast('投票失败：' + error.message);
-
-  showToast('投票成功');
-  // 重新渲染当前帖子的投票框
-  await renderPollUI(postId, options);
-}
-
 // ==========================================
 // ===== 核心模块：无限滚动、投票、渲染 =====
 // ==========================================
@@ -4557,14 +4533,38 @@ function revealRiddle(postId, event) {
   }
 }
 
-// ===== 盲盒解密逻辑 =====
+// 提交投票
+async function submitVote(postId, optionIndex, options) {
+  if (!currentUser) return showToast('请先登录后再投票');
+  
+  // 👈 阵营拦截
+  const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
+  if (post && post.postType === 'forum' && post.faction && currentProfile && post.faction !== currentProfile.faction) {
+    return showToast('你不是这个阵营的成员，无法参与投票');
+  }
+  
+  const { data: existing } = await db.from('post_votes').select('id').eq('post_id', postId).eq('user_id', currentUser.id);
+  if (existing && existing.length > 0) return showToast('你已经投过票了');
+
+  const { error } = await db.from('post_votes').insert({
+    post_id: postId, user_id: currentUser.id, option_index: optionIndex
+  });
+
+  if (error) return showToast('投票失败：' + error.message);
+  showToast('投票成功');
+  await renderPollUI(postId, options);
+}
+
+// 盲盒触发
 function triggerRiddle(postId, type, event) {
   if (event) event.stopPropagation();
+  
+  // 👈 阵营拦截
   const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
   if (post && post.postType === 'forum' && post.faction && currentProfile && post.faction !== currentProfile.faction) {
     return showToast('你不是这个阵营的成员，无法解密');
   }
-  
+
   // 1. 检查是否在冷却中
   const cooldown = localStorage.getItem(`riddle_cd_${postId}`);
   if (cooldown && Date.now() < parseInt(cooldown)) {
@@ -4581,9 +4581,7 @@ function triggerRiddle(postId, type, event) {
   }
 
   // 3. 答题解锁型
-  const post = POSTS.find(p => p.id === postId) || FORUM_POSTS.find(p => p.id === postId);
   if (!post || !post.riddle_data) return;
-
   openRiddleModal(post, postId);
 }
 
